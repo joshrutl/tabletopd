@@ -246,3 +246,38 @@ create policy "users delete items from their own lists"
   using (exists (
     select 1 from public.lists l where l.id = list_items.list_id and l.user_id = auth.uid()
   ));
+
+-- ---------------------------------------------------------------------------
+-- follows: who follows whom. Public (for follower / following counts and the
+-- public /u/[username] page); users can only add or remove their own follows.
+--
+-- Public profile pages also rely on the public-read policies above:
+-- profiles, user_games, and lists / list_items where is_public = true.
+-- ---------------------------------------------------------------------------
+create table if not exists public.follows (
+  follower_id  uuid not null references auth.users (id) on delete cascade,
+  following_id uuid not null references auth.users (id) on delete cascade,
+  created_at   timestamptz default now(),
+  primary key (follower_id, following_id),
+  check (follower_id <> following_id)
+);
+create index if not exists follows_following_idx on public.follows (following_id);
+
+-- Powers the "Friends activity" feed (latest changes per user).
+create index if not exists user_games_user_updated_idx on public.user_games (user_id, updated_at desc);
+
+alter table public.follows enable row level security;
+
+drop policy if exists "follows are readable by everyone" on public.follows;
+create policy "follows are readable by everyone"
+  on public.follows for select using (true);
+
+drop policy if exists "users follow as themselves" on public.follows;
+create policy "users follow as themselves"
+  on public.follows for insert to authenticated
+  with check (auth.uid() = follower_id);
+
+drop policy if exists "users unfollow as themselves" on public.follows;
+create policy "users unfollow as themselves"
+  on public.follows for delete to authenticated
+  using (auth.uid() = follower_id);

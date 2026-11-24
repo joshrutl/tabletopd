@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Share2 } from "lucide-react";
 import type { Game, GameList, Shelf } from "@/lib/types";
 import { ListSummaryCard } from "./ListsView";
 import { isPlayed } from "@/lib/useShelf";
@@ -9,6 +10,7 @@ import type { TopFourState } from "@/lib/useTopFour";
 import StarRating from "./StarRating";
 import { Poster } from "./GameCard";
 import TopFour from "./TopFour";
+import FriendsView from "./FriendsView";
 
 interface Props {
   shelf: Shelf;
@@ -27,6 +29,31 @@ function AccountCard({ auth, onSignIn }: { auth: Auth; onSignIn: () => void }) {
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const flash = (message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 2200);
+  };
+
+  /** Native share sheet on phones; otherwise copy the link. */
+  const shareProfile = async (username: string) => {
+    const url = `${window.location.origin}/u/${username}`;
+    if (typeof navigator.share === "function" && window.matchMedia("(pointer: coarse)").matches) {
+      try {
+        await navigator.share({ title: `@${username} on Tabletopd`, url });
+        return;
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return; // user dismissed the sheet
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      flash("Link copied!");
+    } catch {
+      window.prompt("Copy your profile link:", url);
+    }
+  };
 
   if (!auth.configured) {
     return (
@@ -67,7 +94,25 @@ function AccountCard({ auth, onSignIn }: { auth: Auth; onSignIn: () => void }) {
 
   return (
     <div className="mb-6 rounded-xl border border-line bg-surface p-4">
-      <p className="text-lg font-bold text-white">@{auth.profile?.username ?? auth.email?.split("@")[0]}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-lg font-bold text-white">@{auth.profile?.username ?? auth.email?.split("@")[0]}</p>
+        {auth.profile?.username && (
+          <button
+            onClick={() => shareProfile(auth.profile!.username!)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-line px-3.5 py-1.5 text-sm font-medium text-white/80 transition hover:border-emerald hover:text-emerald"
+          >
+            <Share2 size={14} /> Share Profile
+          </button>
+        )}
+      </div>
+      {toast && (
+        <div
+          role="status"
+          className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-full bg-emerald px-5 py-2 text-sm font-bold text-bg shadow-lg"
+        >
+          {toast}
+        </div>
+      )}
       {editing ? (
         <div className="mt-2">
           <textarea
@@ -114,7 +159,7 @@ function AccountCard({ auth, onSignIn }: { auth: Auth; onSignIn: () => void }) {
   );
 }
 
-export default function ProfileView({ shelf, onOpen, auth, top, onSignIn, lists, onOpenList }: Props) {
+function ProfileMe({ shelf, onOpen, auth, top, onSignIn, lists, onOpenList }: Props) {
   const stats = useMemo(() => {
     const entries = Object.values(shelf);
     const rated = entries.filter((e) => e.rating > 0);
@@ -207,5 +252,39 @@ export default function ProfileView({ shelf, onOpen, auth, top, onSignIn, lists,
         </ul>
       )}
     </section>
+  );
+}
+
+
+/** Profile tab: your own profile, plus a Friends switch (search, following, activity) when signed in. */
+export default function ProfileView(props: Props) {
+  const [view, setView] = useState<"me" | "friends">("me");
+  const userId = props.auth.userId;
+
+  return (
+    <>
+      {userId && (
+        <div role="tablist" aria-label="Profile sections" className="mb-5 grid grid-cols-2 rounded-lg border border-line bg-surface p-1">
+          {(["me", "friends"] as const).map((v) => (
+            <button
+              key={v}
+              role="tab"
+              aria-selected={view === v}
+              onClick={() => setView(v)}
+              className={`rounded-md py-2 text-sm font-medium transition ${
+                view === v ? "bg-line text-white" : "text-muted hover:text-white"
+              }`}
+            >
+              {v === "me" ? "You" : "Friends"}
+            </button>
+          ))}
+        </div>
+      )}
+      {userId && view === "friends" ? (
+        <FriendsView userId={userId} onLog={props.onOpen} />
+      ) : (
+        <ProfileMe {...props} />
+      )}
+    </>
   );
 }
