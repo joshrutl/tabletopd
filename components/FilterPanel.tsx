@@ -16,8 +16,10 @@ interface Props {
   onSort: (s: SortId) => void;
   filter: GameFilter;
   onFilter: (f: GameFilter) => void;
-  /** False when live BGG results are showing (they can't be re-sorted). */
+  /** False when BGG's own order is showing (Hot on BGG / its name search), which can't be re-sorted. */
   sortApplies: boolean;
+  /** Offer the "Hot on BGG" sort (needs a BGG token on the server). */
+  hotAvailable: boolean;
   onClose: () => void;
 }
 
@@ -47,7 +49,7 @@ export function Chip({
 }
 
 /** Slide-up sheet (centered dialog on wide screens) for sort order and exact filters. */
-export default function FilterPanel({ sort, onSort, filter, onFilter, sortApplies, onClose }: Props) {
+export default function FilterPanel({ sort, onSort, filter, onFilter, sortApplies, hotAvailable, onClose }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -81,14 +83,14 @@ export default function FilterPanel({ sort, onSort, filter, onFilter, sortApplie
         <section className="mb-5">
           <h3 className={heading}>Sort order</h3>
           <div className="flex flex-wrap gap-2">
-            {SORT_OPTIONS.map((s) => (
+            {SORT_OPTIONS.filter((s) => s.id !== "hot" || hotAvailable).map((s) => (
               <Chip key={s.id} active={sort === s.id} onClick={() => onSort(s.id)}>
                 {s.label}
               </Chip>
             ))}
           </div>
           {!sortApplies && (
-            <p className="mt-2 text-xs text-muted">Live BGG results keep BGG&apos;s own relevance order.</p>
+            <p className="mt-2 text-xs text-muted">This view keeps BGG&apos;s own order, so the sort doesn&apos;t apply.</p>
           )}
         </section>
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Dices, Loader2 } from "lucide-react";
 import type { Game, SearchResponse, Shelf } from "@/lib/types";
 import { matchesFilter, PLAYER_OPTIONS, TIME_OPTIONS } from "@/lib/filters";
+import { prefetchImages } from "@/lib/useGameImage";
 import GameCard, { type CardHandlers } from "./GameCard";
 import GameGrid from "./GameGrid";
 import { Chip } from "./FilterPanel";
@@ -48,6 +49,13 @@ export default function GameNightView({ shelf, ...handlers }: Props) {
     () => (ownedOnly ? owned.filter((g) => matchesFilter(g, { players, maxTime })) : remote),
     [ownedOnly, owned, remote, players, maxTime],
   );
+
+  // Ask the shared batched cover fetcher for every game on screen right away. It reads the
+  // session cache first, so covers already loaded on Discover / My Shelf show instantly and
+  // only the rest are requested (as a couple of batched calls, not one per card).
+  useEffect(() => {
+    prefetchImages(results);
+  }, [results]);
 
   // A pick that no longer fits the filters is dropped.
   const picked = results.find((g) => g.id === pickedId) ?? null;

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2, SlidersHorizontal } from "lucide-react";
 import type { Shelf } from "@/lib/types";
 import type { Discover } from "@/lib/useDiscover";
-import { NO_FILTER, QUICK_MAX } from "@/lib/filters";
+import { describeFilter, NO_FILTER, QUICK_MAX, SORT_HEADINGS } from "@/lib/filters";
 import type { CardHandlers } from "./GameCard";
 import GameGrid from "./GameGrid";
 import FilterPanel, { Chip } from "./FilterPanel";
@@ -53,7 +53,9 @@ export default function DiscoverView({ d, shelf, ...handlers }: Props) {
       </div>
 
       <h1 className="mb-4 text-sm font-semibold uppercase tracking-widest text-muted">
-        {query.trim() ? `Results for “${query.trim()}”` : "Popular right now"}
+        {[query.trim() ? `Results for “${query.trim()}”` : SORT_HEADINGS[sort], describeFilter(filter)]
+          .filter(Boolean)
+          .join(" · ")}
       </h1>
 
       {d.note && (
@@ -79,7 +81,8 @@ export default function DiscoverView({ d, shelf, ...handlers }: Props) {
           onSort={d.setSort}
           filter={filter}
           onFilter={setFilter}
-          sortApplies={d.source !== "bgg"}
+          sortApplies={d.sortApplied}
+          hotAvailable={d.hotAvailable}
           onClose={() => setPanelOpen(false)}
         />
       )}

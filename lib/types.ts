@@ -14,11 +14,16 @@ export interface Game {
   estimated?: boolean;
 }
 
-export type SortId = "popular" | "rated" | "highest" | "newest";
+/** "hot" is BGG's Hotness feed; the others sort our full ranked catalogue. */
+export type SortId = "popular" | "rated" | "highest" | "newest" | "hot";
 
 export interface SearchResponse {
   games: Game[];
   source: "bgg" | "mock" | "local";
+  /** False when the order is BGG's own (Hotness / its name search) rather than the chosen sort */
+  sortApplied?: boolean;
+  /** True when a BGG token is configured, so the "Hot on BGG" sort can be offered */
+  hotAvailable?: boolean;
   note?: string;
 }
 

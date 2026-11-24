@@ -28,7 +28,21 @@ export const SORT_OPTIONS: { id: SortId; label: string }[] = [
   { id: "rated", label: "Most Rated" },
   { id: "highest", label: "Highest Rated" },
   { id: "newest", label: "Newest" },
+  { id: "hot", label: "Hot on BGG" },
 ];
+
+/** Section heading for each sort on the Discover tab (shown uppercase). */
+export const SORT_HEADINGS: Record<SortId, string> = Object.fromEntries(
+  SORT_OPTIONS.map((o) => [o.id, o.label]),
+) as Record<SortId, string>;
+
+/** Short description of active filters for headings, e.g. "2-player · under 45m". */
+export function describeFilter(f: GameFilter): string {
+  const parts: string[] = [];
+  if (f.players) parts.push(`${f.players}-player`);
+  if (f.maxTime) parts.push(f.maxTime === QUICK_MAX ? "under 45m" : `up to ${f.maxTime}m`);
+  return parts.join(" · ");
+}
 
 /** Games with unknown player count / playtime (0) are never excluded. */
 export function matchesFilter(g: Game, f: GameFilter): boolean {

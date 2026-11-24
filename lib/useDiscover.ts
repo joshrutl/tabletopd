@@ -14,6 +14,8 @@ export function useDiscover() {
   const [games, setGames] = useState<Game[]>([]);
   const [source, setSource] = useState<SearchResponse["source"]>("local");
   const [note, setNote] = useState<string | undefined>();
+  const [hotAvailable, setHotAvailable] = useState(false);
+  const [sortApplied, setSortApplied] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +32,8 @@ export function useDiscover() {
         const data = (await res.json()) as SearchResponse;
         setGames(data.games);
         setSource(data.source);
+        setHotAvailable(Boolean(data.hotAvailable));
+        setSortApplied(data.sortApplied !== false);
         setNote(data.source === "mock" ? data.note : undefined);
         setError(null);
         setLoading(false);
@@ -45,7 +49,21 @@ export function useDiscover() {
     };
   }, [query, sort, filter]);
 
-  return { query, setQuery, sort, setSort, filter, setFilter, games, source, note, loading, error };
+  return {
+    query,
+    setQuery,
+    sort,
+    setSort,
+    filter,
+    setFilter,
+    games,
+    source,
+    note,
+    hotAvailable,
+    sortApplied,
+    loading,
+    error,
+  };
 }
 
 export type Discover = ReturnType<typeof useDiscover>;
