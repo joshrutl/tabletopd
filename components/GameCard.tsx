@@ -55,7 +55,7 @@ export function Poster({
 
   const failed = () => {
     setBroken(true);
-    forgetCachedImage(game.id); // don't keep serving a dead URL from the session cache
+    forgetCachedImage(game.id); // don't keep serving a dead URL from the shared cover store
   };
   const h = game.hue ?? (Number(game.id) % 360 || 200);
 

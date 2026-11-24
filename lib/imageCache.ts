@@ -1,20 +1,34 @@
 /**
- * Client-side cache of resolved box-art URLs (bgg_id -> url).
+ * The app-wide store of box-art URLs, keyed by BGG id.
  *
- * Lives at module level so it survives tab switches (the Discover, My Shelf and
- * Profile views unmount and remount their cards), and is mirrored to
- * sessionStorage so it also survives a reload within the same browser tab.
+ * - Keys are always numbers (`Number(id)`), so "13" and 13 can never be two different entries.
+ * - It is reactive: cards read it with useSyncExternalStore (see useGameImage), so every mounted
+ *   card for a game, on Discover, Game Night or My Shelf, re-renders the moment its cover is
+ *   known. That fixes cards that mounted before a cover arrived and then never updated.
+ * - It is mirrored to localStorage, so covers survive reloads and mobile browser restarts.
+ *
+ * It is a module-level store rather than a React context provider: same behaviour, but each card
+ * subscribes to just its own id and nothing needs wrapping.
  */
 
 import type { Game, Shelf } from "./types";
 import { validImageUrl } from "./images";
 
 const STORAGE_KEY = "tabletopd_img_cache_v1";
-const MAX_ENTRIES = 600;
+const MAX_ENTRIES = 1500;
 const MISS_TTL_MS = 5 * 60 * 1000; // the server said "no image": don't ask again for 5 minutes
+const BROKEN_TTL_MS = 60 * 1000; // a cached URL failed to load: don't re-resolve it in a loop
 
-const hits = new Map<string, string>();
-const misses = new Map<string, number>();
+type Id = string | number;
+
+/** Canonical key for a BGG id, or null for anything that isn't one (e.g. a custom game). */
+const keyOf = (id: Id): number | null => {
+  const n = Number(id);
+  return Number.isInteger(n) && n > 0 ? n : null;
+};
+
+const hits = new Map<number, string>();
+const misses = new Map<number, number>();
 let hydrated = false;
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -22,10 +36,12 @@ function hydrate() {
   if (hydrated || typeof window === "undefined") return;
   hydrated = true;
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     for (const [id, url] of Object.entries(JSON.parse(raw) as Record<string, unknown>)) {
-      if (typeof url === "string") hits.set(id, url);
+      const key = keyOf(id);
+      const clean = typeof url === "string" ? validImageUrl(url) : null;
+      if (key && clean) hits.set(key, clean);
     }
   } catch {
     /* storage unavailable or corrupt: start empty */
@@ -37,38 +53,87 @@ function scheduleWrite() {
   writeTimer = setTimeout(() => {
     writeTimer = null;
     try {
-      // Keep the most recent entries if we're over the cap.
-      const entries = [...hits.entries()].slice(-MAX_ENTRIES);
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)));
+      const entries = [...hits.entries()].slice(-MAX_ENTRIES); // keep the most recent if over the cap
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)));
     } catch {
-      /* quota exceeded or blocked: the in-memory cache still works */
+      /* quota exceeded or blocked: the in-memory store still works */
     }
   }, 250);
 }
 
-export function getCachedImage(id: string): string | null {
-  hydrate();
-  return hits.get(id) ?? null;
+/* ------------------------------- subscriptions ------------------------------ */
+
+const storeListeners = new Set<() => void>();
+const coverListeners = new Set<(id: string, url: string) => void>();
+
+/** For useSyncExternalStore: called whenever any cover is added or removed. */
+export function subscribeCovers(listener: () => void): () => void {
+  storeListeners.add(listener);
+  return () => storeListeners.delete(listener);
 }
 
 /**
- * Teach the cache every cover we already know about. Games loaded from your shelf, lists, Top 4
- * or search results often carry a cover URL; other screens render the same game from an object
- * without one (a fresh search result), and would otherwise show a blank card even though the
- * cover is known. Seeding makes every card for that game find it instantly.
+ * Be told whenever a game's cover becomes known. The shelf and lists use this to store the URL
+ * on their games in memory. Returns an unsubscribe function.
+ */
+export function onCoverKnown(listener: (id: string, url: string) => void): () => void {
+  coverListeners.add(listener);
+  return () => coverListeners.delete(listener);
+}
+
+function notify() {
+  for (const l of storeListeners) l();
+}
+
+/* ---------------------------------- covers ---------------------------------- */
+
+export function getCachedImage(id: Id): string | null {
+  hydrate();
+  const key = keyOf(id);
+  return key === null ? null : (hits.get(key) ?? null);
+}
+
+export function setCachedImage(id: Id, url: string): void {
+  hydrate();
+  const key = keyOf(id);
+  if (key === null) return;
+  misses.delete(key);
+  if (hits.get(key) === url) return;
+  hits.set(key, url);
+  scheduleWrite();
+  notify();
+  for (const l of coverListeners) l(String(key), url);
+}
+
+/** Drops a URL that turned out to be broken, and briefly stops it being looked up again. */
+export function forgetCachedImage(id: Id): void {
+  hydrate();
+  const key = keyOf(id);
+  if (key === null) return;
+  misses.set(key, Date.now() + BROKEN_TTL_MS);
+  if (hits.delete(key)) {
+    scheduleWrite();
+    notify();
+  }
+}
+
+/**
+ * Teach the store every cover we already know about: games loaded from your shelf, lists, Top 4
+ * or search results often carry one, and other screens render the same game from an object
+ * without it.
  */
 export function rememberCovers(games: Array<Pick<Game, "id" | "image" | "thumbnail">>): void {
   for (const g of games) {
-    if (!g || hits.has(g.id)) continue;
+    if (!g || getCachedImage(g.id)) continue;
     const url = validImageUrl(g.image) ?? validImageUrl(g.thumbnail);
     if (url) setCachedImage(g.id, url);
   }
 }
 
 /**
- * The game with a known cover merged in (from the cache, else from the user's shelf entry),
- * so a card can render it on first paint. Returns the same object if it already has a cover
- * or none is known.
+ * The game with a known cover merged in (from the store, else from the user's shelf entry), so a
+ * card can render it on first paint. Returns the same object if it already has a cover or none
+ * is known.
  */
 export function withKnownCover<T extends Pick<Game, "id" | "image" | "thumbnail">>(game: T, shelf?: Shelf): T {
   if (validImageUrl(game.image) || validImageUrl(game.thumbnail)) return game;
@@ -77,43 +142,25 @@ export function withKnownCover<T extends Pick<Game, "id" | "image" | "thumbnail"
   return url ? { ...game, thumbnail: url } : game;
 }
 
-type CoverListener = (id: string, url: string) => void;
-const listeners = new Set<CoverListener>();
-
-/**
- * Be told whenever a game's cover becomes known (a lookup resolved, or covers were seeded).
- * The shelf and lists use this to store the URL on their games in memory, so those cards
- * carry their cover with them. Returns an unsubscribe function.
- */
-export function onCoverKnown(listener: CoverListener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export function setCachedImage(id: string, url: string): void {
-  hydrate();
-  misses.delete(id);
-  if (hits.get(id) === url) return;
-  hits.set(id, url);
-  scheduleWrite();
-  for (const l of listeners) l(id, url);
-}
-
-/** Drops a URL that turned out to be broken so it gets looked up again later. */
-export function forgetCachedImage(id: string): void {
-  hydrate();
-  if (hits.delete(id)) scheduleWrite();
-}
+/* ----------------------------------- misses ---------------------------------- */
 
 /** `ttlMs` is shorter for transient failures than for a definite "no image". */
-export function recordImageMiss(id: string, ttlMs: number = MISS_TTL_MS): void {
-  misses.set(id, Date.now() + ttlMs);
+export function recordImageMiss(id: Id, ttlMs: number = MISS_TTL_MS): void {
+  const key = keyOf(id);
+  if (key !== null) misses.set(key, Date.now() + ttlMs);
 }
 
-export function isRecentImageMiss(id: string): boolean {
-  const until = misses.get(id);
+export function clearImageMiss(id: Id): void {
+  const key = keyOf(id);
+  if (key !== null) misses.delete(key);
+}
+
+export function isRecentImageMiss(id: Id): boolean {
+  const key = keyOf(id);
+  if (key === null) return false;
+  const until = misses.get(key);
   if (until === undefined) return false;
   if (until > Date.now()) return true;
-  misses.delete(id);
+  misses.delete(key);
   return false;
 }
