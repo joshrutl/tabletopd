@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Share2 } from "lucide-react";
+import { Image as ImageIcon, Share2 } from "lucide-react";
+import { shelfStats } from "@/lib/stats";
+import ShareStoryModal, { type StoryCardSpec } from "./ShareStoryModal";
 import type { Game, GameList, Shelf } from "@/lib/types";
 import { ListSummaryCard } from "./ListsView";
 import { isPlayed } from "@/lib/useShelf";
@@ -24,7 +26,15 @@ interface Props {
 }
 
 /** Username + editable bio when signed in; a sign-in prompt when not. */
-function AccountCard({ auth, onSignIn }: { auth: Auth; onSignIn: () => void }) {
+function AccountCard({
+  auth,
+  onSignIn,
+  onShareGraphic,
+}: {
+  auth: Auth;
+  onSignIn: () => void;
+  onShareGraphic: () => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -97,12 +107,20 @@ function AccountCard({ auth, onSignIn }: { auth: Auth; onSignIn: () => void }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-lg font-bold text-white">@{auth.profile?.username ?? auth.email?.split("@")[0]}</p>
         {auth.profile?.username && (
-          <button
-            onClick={() => shareProfile(auth.profile!.username!)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line px-3.5 py-1.5 text-sm font-medium text-white/80 transition hover:border-emerald hover:text-emerald"
-          >
-            <Share2 size={14} /> Share Profile
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => shareProfile(auth.profile!.username!)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-line px-3.5 py-1.5 text-sm font-medium text-white/80 transition hover:border-emerald hover:text-emerald"
+            >
+              <Share2 size={14} /> Share Profile
+            </button>
+            <button
+              onClick={onShareGraphic}
+              className="inline-flex items-center gap-1.5 rounded-full border border-line px-3.5 py-1.5 text-sm font-medium text-white/80 transition hover:border-amber hover:text-amber"
+            >
+              <ImageIcon size={14} /> Share Graphic
+            </button>
+          </div>
         )}
       </div>
       {toast && (
@@ -183,11 +201,27 @@ function ProfileMe({ shelf, onOpen, auth, top, onSignIn, lists, onOpenList }: Pr
   ];
   const heading = "mb-3 text-xs font-semibold uppercase tracking-widest text-muted";
 
+  // "Share Graphic": a 9:16 story card of the Top 4
+  const [storyOpen, setStoryOpen] = useState(false);
+  const username = auth.profile?.username ?? null;
+  const hasFavorites = top.slots.some(Boolean);
+  const storySpec: StoryCardSpec = {
+    title: username ? `@${username}'s Top 4 Board Games` : "My Top 4 Board Games",
+    games: top.slots.map((g) => (g ? { game: g, rating: shelf[g.id]?.rating ?? 0 } : null)),
+    ranked: false,
+    footerUrl: username ? `tabletopd.vercel.app/u/${username}` : "tabletopd.vercel.app",
+    filename: `tabletopd-${username ?? "me"}-top4.png`,
+  };
+
   return (
     <section>
       <h1 className="mb-5 text-xl font-bold text-white">Your Profile</h1>
 
-      <AccountCard auth={auth} onSignIn={onSignIn} />
+      <AccountCard
+        auth={auth}
+        onSignIn={onSignIn}
+        onShareGraphic={() => (hasFavorites ? setStoryOpen(true) : window.alert("Pick at least one Top 4 favorite first."))}
+      />
 
       <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {tiles.map((t) => (
@@ -198,10 +232,24 @@ function ProfileMe({ shelf, onOpen, auth, top, onSignIn, lists, onOpenList }: Pr
         ))}
       </div>
 
-      <h2 className={heading}>Top 4 favorites</h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted">Top 4 favorites</h2>
+        {/* Signed-in users get this next to Share Profile; this covers everyone else */}
+        {!username && hasFavorites && (
+          <button
+            onClick={() => setStoryOpen(true)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald hover:underline"
+          >
+            <ImageIcon size={13} /> Share Graphic
+          </button>
+        )}
+      </div>
       <div className="mb-8">
         <TopFour top={top} />
       </div>
+      {storyOpen && (
+        <ShareStoryModal spec={storySpec} stats={shelfStats(shelf)} onClose={() => setStoryOpen(false)} />
+      )}
 
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-muted">Lists</h2>

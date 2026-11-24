@@ -1,11 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Check, Globe, Link2, ListOrdered, Lock, Pencil, Plus, Trash2 } from "lucide-react";
-import type { Game, GameList } from "@/lib/types";
+import { ArrowLeft, Check, Globe, Image as ImageIcon, Link2, ListOrdered, Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import type { Game, GameList, Shelf } from "@/lib/types";
 import type { ListsState } from "@/lib/useLists";
+import { shelfStats } from "@/lib/stats";
 import { Poster } from "./GameCard";
 import ListEditor from "./ListEditor";
+import ShareStoryModal, { type StoryCardSpec } from "./ShareStoryModal";
+
+/** URL-safe slug for file names. */
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "list";
 
 /** Compact card: title, counts and a fan of the first few posters. Also used on the Profile tab. */
 export function ListSummaryCard({ list, onClick }: { list: GameList; onClick: () => void }) {
@@ -59,14 +69,34 @@ interface Props {
   openId: string | null;
   onOpen: (id: string | null) => void;
   onLog: (g: Game) => void;
+  /** For star ratings and stats on the share graphic */
+  shelf: Shelf;
+  username: string | null;
 }
 
-export default function ListsView({ listsState, signedIn, openId, onOpen, onLog }: Props) {
+export default function ListsView({ listsState, signedIn, openId, onOpen, onLog, shelf, username }: Props) {
   const { lists, saveList, deleteList } = listsState;
   const [editing, setEditing] = useState<GameList | "new" | null>(null);
   const [copied, setCopied] = useState(false);
+  const [storyFor, setStoryFor] = useState<GameList | null>(null);
 
   const open = lists.find((l) => l.id === openId) ?? null;
+
+  const storySpec = (l: GameList): StoryCardSpec => ({
+    title: l.title,
+    subtitle: l.description || undefined,
+    games: l.items.slice(0, 4).map((it) => ({ game: it.game, rating: shelf[it.game.id]?.rating ?? 0 })),
+    ranked: l.isRanked,
+    moreCount: Math.max(0, l.items.length - 4),
+    // Point at the list itself when it can be opened by link; otherwise at the profile.
+    footerUrl:
+      signedIn && l.isPublic
+        ? `tabletopd.vercel.app/lists/${l.id}`
+        : username
+          ? `tabletopd.vercel.app/u/${username}`
+          : "tabletopd.vercel.app",
+    filename: `tabletopd-${username ?? "me"}-${slug(l.title)}.png`,
+  });
 
   const share = async (list: GameList) => {
     const url = `${window.location.origin}/lists/${list.id}`;
@@ -121,6 +151,13 @@ export default function ListsView({ listsState, signedIn, openId, onOpen, onLog 
               </button>
             )}
             <button
+              onClick={() => setStoryFor(open)}
+              disabled={open.items.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-full border border-line px-3.5 py-1.5 text-sm font-medium text-white/80 hover:border-amber hover:text-amber disabled:pointer-events-none disabled:opacity-40"
+            >
+              <ImageIcon size={14} /> Share Graphic
+            </button>
+            <button
               onClick={() => setEditing(open)}
               className="inline-flex items-center gap-1.5 rounded-full border border-line px-3.5 py-1.5 text-sm font-medium text-white/80 hover:border-emerald hover:text-emerald"
             >
@@ -173,6 +210,9 @@ export default function ListsView({ listsState, signedIn, openId, onOpen, onLog 
           </ol>
         )}
         {editor}
+        {storyFor && (
+          <ShareStoryModal spec={storySpec(storyFor)} stats={shelfStats(shelf)} onClose={() => setStoryFor(null)} />
+        )}
       </section>
     );
   }

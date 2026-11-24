@@ -31,9 +31,20 @@ interface Props extends CardHandlers {
   signedIn: boolean;
   openListId: string | null;
   onOpenList: (id: string | null) => void;
+  username: string | null;
 }
 
-export default function ShelfView({ shelf, seg, onSeg, listsState, signedIn, openListId, onOpenList, ...handlers }: Props) {
+export default function ShelfView({
+  shelf,
+  seg,
+  onSeg,
+  listsState,
+  signedIn,
+  openListId,
+  onOpenList,
+  username,
+  ...handlers
+}: Props) {
   const [q, setQ] = useState("");
 
   const entries = useMemo(
@@ -84,6 +95,8 @@ export default function ShelfView({ shelf, seg, onSeg, listsState, signedIn, ope
           openId={openListId}
           onOpen={onOpenList}
           onLog={handlers.onLog}
+          shelf={shelf}
+          username={username}
         />
       ) : (
         <>

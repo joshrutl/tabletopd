@@ -98,6 +98,7 @@ export default function Home() {
             signedIn={Boolean(auth.userId)}
             openListId={openListId}
             onOpenList={setOpenListId}
+            username={auth.profile?.username ?? null}
             {...handlers}
           />
         )}
