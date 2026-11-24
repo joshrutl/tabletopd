@@ -128,3 +128,27 @@ create policy "users update their own user_games"
 drop policy if exists "users delete their own user_games" on public.user_games;
 create policy "users delete their own user_games"
   on public.user_games for delete using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
+-- game_images: shared cache of box-art URLs (one row per BGG game)
+-- Written by the /api/bgg/image route. With SUPABASE_SERVICE_ROLE_KEY set the
+-- route bypasses RLS; without it, signed-in users' sessions can insert (never
+-- update) rows, and only for URLs on BGG's image CDN.
+-- ---------------------------------------------------------------------------
+create table if not exists public.game_images (
+  bgg_id      integer primary key,
+  image_url   text not null,
+  updated_at  timestamptz not null default now(),
+  constraint game_images_url_is_geekdo
+    check (image_url ~ '^https://([a-z0-9-]+\.)*geekdo-images\.com/')
+);
+
+alter table public.game_images enable row level security;
+
+drop policy if exists "game_images are readable by everyone" on public.game_images;
+create policy "game_images are readable by everyone"
+  on public.game_images for select using (true);
+
+drop policy if exists "signed-in users can cache new game images" on public.game_images;
+create policy "signed-in users can cache new game images"
+  on public.game_images for insert to authenticated with check (true);

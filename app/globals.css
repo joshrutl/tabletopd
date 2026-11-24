@@ -25,6 +25,20 @@ body {
   animation: sheet-up 0.22s ease-out;
 }
 
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.shimmer {
+  background: linear-gradient(100deg, #1e252d 30%, #2c3440 50%, #1e252d 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
 }

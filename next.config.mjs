@@ -6,6 +6,13 @@ const nextConfig = {
   outputFileTracingIncludes: {
     "/api/bgg/search": ["./data/boardgames_ranks.csv"],
   },
+  // BGG box art is served from its image CDN.
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "cf.geekdo-images.com" },
+      { protocol: "https", hostname: "**.geekdo-images.com" },
+    ],
+  },
 };
 
 export default nextConfig;

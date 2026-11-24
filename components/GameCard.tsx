@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { Bookmark, Check, Clock, PenLine, Star, Users } from "lucide-react";
 import type { Game, ShelfEntry } from "@/lib/types";
+import { useGameImage } from "@/lib/useGameImage";
 
 export interface CardHandlers {
   onToggleOwned: (g: Game) => void;
@@ -29,20 +32,51 @@ export function Poster({
   /** Leave room for card overlay buttons above the placeholder title. */
   clearOverlay?: boolean;
 }) {
-  const src = game.image || game.thumbnail;
-  if (src) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={game.name} loading="lazy" className={`object-cover ${className}`} />;
-  }
+  const ref = useRef<HTMLDivElement>(null);
+  const { src, resolving } = useGameImage(game, ref);
+  const [loaded, setLoaded] = useState(false);
+  const [broken, setBroken] = useState(false);
+
+  // A different image URL starts the fade-in over.
+  useEffect(() => {
+    setLoaded(false);
+    setBroken(false);
+  }, [src]);
+
+  const showImage = Boolean(src) && !broken;
   const h = game.hue ?? (Number(game.id) % 360 || 200);
+
   return (
     <div
-      className={`flex items-start overflow-hidden p-2 ${clearOverlay ? "pt-12" : ""} ${className}`}
+      ref={ref}
+      className={`relative overflow-hidden ${className}`}
       style={{
         background: `linear-gradient(145deg, hsl(${h} 45% 28%), hsl(${(h + 40) % 360} 50% 12%))`,
       }}
     >
-      <span className="text-lg font-bold leading-tight text-white/90 drop-shadow">{game.name}</span>
+      {/* Styled title card: the fallback when there is no cover */}
+      <span
+        className={`absolute inset-x-0 top-0 p-2 text-lg font-bold leading-tight text-white/90 drop-shadow transition-opacity duration-500 ${
+          clearOverlay ? "pt-12" : ""
+        } ${showImage && loaded ? "opacity-0" : "opacity-100"}`}
+      >
+        {game.name}
+      </span>
+
+      {showImage && (
+        <Image
+          src={src!}
+          alt={game.name}
+          fill
+          sizes="(max-width: 640px) 50vw, 220px"
+          className={`object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`}
+          onLoad={() => setLoaded(true)}
+          onError={() => setBroken(true)}
+        />
+      )}
+
+      {/* Shimmer skeleton while the cover is being looked up or downloaded */}
+      {(resolving || (showImage && !loaded)) && <div className="shimmer absolute inset-0" aria-hidden />}
     </div>
   );
 }
