@@ -20,16 +20,15 @@ async function limited<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-function lookup(id: string, name: string): Promise<string | null> {
+function lookup(id: string): Promise<string | null> {
   let p = lookups.get(id);
   if (!p) {
     p = limited(async () => {
       try {
-        // The name is only a hint for games the server's index doesn't know.
-        const res = await fetch(`/api/bgg/image?id=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`);
+        const res = await fetch(`/api/bgg/image?id=${encodeURIComponent(id)}`);
         if (!res.ok) return null;
-        const data = (await res.json()) as { imageUrl?: string | null };
-        return validImageUrl(data.imageUrl);
+        const data = (await res.json()) as { image_url?: string | null };
+        return validImageUrl(data.image_url);
       } catch {
         return null;
       }
@@ -59,7 +58,7 @@ export function useGameImage(game: Game, ref: RefObject<Element | null>) {
 
     let cancelled = false;
     const start = () => {
-      lookup(game.id, game.name).then((url) => {
+      lookup(game.id).then((url) => {
         if (cancelled) return;
         setFound(url);
         setSettled(true);

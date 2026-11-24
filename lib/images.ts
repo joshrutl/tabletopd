@@ -1,6 +1,6 @@
 /**
- * Only these image hosts are trusted for box art: BGG's CDN and Wikimedia
- * (Wikipedia article images, used as a fallback when BGG blocks lookups).
+ * Only these image hosts are trusted for box art: BGG's CDN (from the official
+ * API) and Wikimedia (the hand-picked covers in lib/mockGames.ts).
  */
 const TRUSTED_HOST = /(^|\.)geekdo-images\.com$|^(upload|thumb)\.wikimedia\.org$/;
 

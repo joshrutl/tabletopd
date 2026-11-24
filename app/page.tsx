@@ -86,6 +86,18 @@ export default function Home() {
             onSignIn={() => setAuthOpen(true)}
           />
         )}
+
+        <footer className="mt-12 border-t border-line pt-4 text-center text-xs text-muted">
+          Game data powered by{" "}
+          <a
+            href="https://boardgamegeek.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline decoration-line underline-offset-2 transition hover:text-emerald hover:decoration-emerald"
+          >
+            BoardGameGeek
+          </a>
+        </footer>
       </main>
 
       <BottomNav tab={tab} onTab={setTab} shelfCount={Object.keys(shelf).length} />
