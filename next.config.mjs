@@ -5,12 +5,16 @@ const nextConfig = {
   // can't always see. Without this, Vercel's serverless bundle omits it.
   outputFileTracingIncludes: {
     "/api/bgg/search": ["./data/boardgames_ranks.csv"],
+    // The image route looks up game names from the same file.
+    "/api/bgg/image": ["./data/boardgames_ranks.csv"],
   },
-  // BGG box art is served from its image CDN.
+  // Box art is rendered with plain <img> tags (no Next image optimizer), but these
+  // hosts stay allowed in case next/image is used for them later.
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "cf.geekdo-images.com" },
       { protocol: "https", hostname: "**.geekdo-images.com" },
+      { protocol: "https", hostname: "upload.wikimedia.org" },
     ],
   },
 };

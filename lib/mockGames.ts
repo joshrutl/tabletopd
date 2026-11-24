@@ -51,13 +51,46 @@ const META: Meta[] = [
   ["291453", "SCOUT", 2019, 2, 5, 20, 7.8],
 ];
 
+/**
+ * Box-art covers for the curated games, from each game's Wikipedia article (looked up and
+ * checked to serve an image). Games without a usable Wikipedia image are omitted and render the
+ * styled title card until a BGG token supplies real art. Covers belong to their publishers.
+ */
+const COVERS: Record<string, string> = {
+  "13": "https://upload.wikimedia.org/wikipedia/en/a/a3/Catan-2015-boxart.jpg", // Catan
+  "50": "https://upload.wikimedia.org/wikipedia/en/9/93/Lostcities250px.jpg", // Lost Cities
+  "822": "https://upload.wikimedia.org/wikipedia/en/5/5e/Carcassonne-game.jpg", // Carcassonne
+  "2655": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7d/Hive_%28Carbon_Edition%29_Game.jpg/500px-Hive_%28Carbon_Edition%29_Game.jpg", // Hive
+  "9209": "https://upload.wikimedia.org/wikipedia/en/9/92/Ticket_to_Ride_Board_Game_Box_EN.jpg", // Ticket to Ride
+  "30549": "https://upload.wikimedia.org/wikipedia/en/3/36/Pandemic_game.jpg", // Pandemic
+  "39856": "https://upload.wikimedia.org/wikipedia/en/7/7b/Dixitgame.jpg", // Dixit
+  "54043": "https://upload.wikimedia.org/wikipedia/en/6/69/Japiur_card_game_box_cover.jpg", // Jaipur
+  "65244": "https://upload.wikimedia.org/wikipedia/en/b/b0/Forbidden_Island_game_cover.jpg", // Forbidden Island
+  "68448": "https://upload.wikimedia.org/wikipedia/en/0/0b/7_Wonders_-_New_Edition_boxart.png", // 7 Wonders
+  "98778": "https://upload.wikimedia.org/wikipedia/en/b/b1/Hanabi_cover.jpg", // Hanabi
+  "129622": "https://upload.wikimedia.org/wikipedia/en/e/e1/Love_Letter_box_cover.jpg", // Love Letter
+  "133473": "https://upload.wikimedia.org/wikipedia/en/9/98/Sushi_Go%21_box.jpg", // Sushi Go!
+  "148228": "https://upload.wikimedia.org/wikipedia/en/2/2e/BoardGameSplendorLogoFairUse.jpg", // Splendor
+  "153938": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3d/Camel_Up_board_game.jpg/500px-Camel_Up_board_game.jpg", // Camel Up
+  "173346": "https://upload.wikimedia.org/wikipedia/en/6/6d/7_Wonders_Duel_cover.png", // 7 Wonders Duel
+  "178900": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b0/Codenames_board_game.jpg/500px-Codenames_board_game.jpg", // Codenames
+  "194655": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ec/Santorini_game_render.jpg/500px-Santorini_game_render.jpg", // Santorini
+  "199561": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4e/A_nearly_complete_window_in_Sagrada.jpg/500px-A_nearly_complete_window_in_Sagrada.jpg", // Sagrada
+  "204583": "https://upload.wikimedia.org/wikipedia/en/a/a3/Kingdomino_Box_Cover.png", // Kingdomino
+  "230802": "https://upload.wikimedia.org/wikipedia/en/2/23/Picture_of_Azul_game_box.jpg", // Azul
+  "244521": "https://upload.wikimedia.org/wikipedia/en/e/e3/The_Quacks_of_Quedlinburg_box_cover.jpg", // The Quacks of Quedlinburg
+  "254640": "https://upload.wikimedia.org/wikipedia/en/6/61/Just_One_box.png", // Just One
+  "266192": "https://upload.wikimedia.org/wikipedia/en/c/c3/3d-wingspan-768x752.png", // Wingspan
+  "295947": "https://upload.wikimedia.org/wikipedia/en/7/79/Cascadia_box_cover.JPG", // Cascadia
+};
+
 export const MOCK_GAMES: Game[] = META.map(
   ([id, name, year, min, max, time, rating]): Game => ({
     id,
     name,
     yearPublished: year,
-    thumbnail: null,
-    image: null,
+    thumbnail: COVERS[id] ?? null,
+    image: COVERS[id] ?? null,
     minPlayers: min,
     maxPlayers: max,
     playingTime: time,

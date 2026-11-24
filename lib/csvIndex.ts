@@ -115,6 +115,18 @@ export function getCsvIndex(): Indexed[] | null {
   return index;
 }
 
+const gn = globalThis as unknown as { __bggNameById?: Map<string, string> };
+
+/** Display name for a BGG id, from the local index (null if the CSV is missing or the id is unknown). */
+export function getGameName(id: string): string | null {
+  if (!gn.__bggNameById) {
+    const map = new Map<string, string>();
+    for (const i of getCsvIndex() ?? []) map.set(i.game.id, i.game.name);
+    gn.__bggNameById = map;
+  }
+  return gn.__bggNameById.get(id) ?? null;
+}
+
 const CURRENT_YEAR = new Date().getFullYear();
 
 /** "Popular & Approachable" score: popularity, nudged up by how high it ranks in its easy category. */

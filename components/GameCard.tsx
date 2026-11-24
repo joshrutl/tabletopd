@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { Bookmark, Check, Clock, PenLine, Star, Users } from "lucide-react";
 import type { Game, ShelfEntry } from "@/lib/types";
 import { useGameImage } from "@/lib/useGameImage";
@@ -64,12 +63,17 @@ export function Poster({
       </span>
 
       {showImage && (
-        <Image
+        // Plain <img> on purpose: no optimizer in the way, and onError falls back to the title card.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
           src={src!}
           alt={game.name}
-          fill
-          sizes="(max-width: 640px) 50vw, 220px"
-          className={`object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
+            loaded ? "opacity-100" : "opacity-0"
+          }`}
           onLoad={() => setLoaded(true)}
           onError={() => setBroken(true)}
         />

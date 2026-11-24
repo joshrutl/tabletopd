@@ -20,12 +20,13 @@ async function limited<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-function lookup(id: string): Promise<string | null> {
+function lookup(id: string, name: string): Promise<string | null> {
   let p = lookups.get(id);
   if (!p) {
     p = limited(async () => {
       try {
-        const res = await fetch(`/api/bgg/image?id=${encodeURIComponent(id)}`);
+        // The name is only a hint for games the server's index doesn't know.
+        const res = await fetch(`/api/bgg/image?id=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`);
         if (!res.ok) return null;
         const data = (await res.json()) as { imageUrl?: string | null };
         return validImageUrl(data.imageUrl);
@@ -58,7 +59,7 @@ export function useGameImage(game: Game, ref: RefObject<Element | null>) {
 
     let cancelled = false;
     const start = () => {
-      lookup(game.id).then((url) => {
+      lookup(game.id, game.name).then((url) => {
         if (cancelled) return;
         setFound(url);
         setSettled(true);
@@ -85,6 +86,7 @@ export function useGameImage(game: Game, ref: RefObject<Element | null>) {
       cancelled = true;
       io.disconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.id, direct, numeric, ref]);
 
   return {

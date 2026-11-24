@@ -132,23 +132,32 @@ create policy "users delete their own user_games"
 -- ---------------------------------------------------------------------------
 -- game_images: shared cache of box-art URLs (one row per BGG game)
 -- Written by the /api/bgg/image route. With SUPABASE_SERVICE_ROLE_KEY set the
--- route bypasses RLS; without it, signed-in users' sessions can insert (never
--- update) rows, and only for URLs on BGG's image CDN.
+-- route bypasses RLS; without it, anonymous and signed-in visitors can insert
+-- (never update or delete) rows, and only for URLs on BGG's image CDN or
+-- Wikimedia. Set the service key and drop the insert policy to lock this down.
 -- ---------------------------------------------------------------------------
 create table if not exists public.game_images (
   bgg_id      integer primary key,
   image_url   text not null,
-  updated_at  timestamptz not null default now(),
-  constraint game_images_url_is_geekdo
-    check (image_url ~ '^https://([a-z0-9-]+\.)*geekdo-images\.com/')
+  updated_at  timestamptz not null default now()
 );
+
+-- Allowed hosts: BGG's image CDN and Wikimedia (Wikipedia article images).
+alter table public.game_images drop constraint if exists game_images_url_is_geekdo;
+alter table public.game_images drop constraint if exists game_images_url_is_trusted;
+alter table public.game_images add constraint game_images_url_is_trusted
+  check (
+    image_url ~ '^https://([a-z0-9-]+\.)*geekdo-images\.com/'
+    or image_url ~ '^https://(upload|thumb)\.wikimedia\.org/'
+  );
 
 alter table public.game_images enable row level security;
 
 drop policy if exists "game_images are readable by everyone" on public.game_images;
 create policy "game_images are readable by everyone"
-  on public.game_images for select using (true);
+  on public.game_images for select to anon, authenticated using (true);
 
 drop policy if exists "signed-in users can cache new game images" on public.game_images;
-create policy "signed-in users can cache new game images"
-  on public.game_images for insert to authenticated with check (true);
+drop policy if exists "anyone can cache new game images" on public.game_images;
+create policy "anyone can cache new game images"
+  on public.game_images for insert to anon, authenticated with check (true);
