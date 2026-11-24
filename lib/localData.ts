@@ -1,4 +1,5 @@
 import type { Game, GameList, Shelf } from "./types";
+import { cleanGame } from "./text";
 
 export const SHELF_KEY = "tabletopd.shelf.v1";
 export const TOP_FOUR_KEY = "tabletopd_top_four";
@@ -18,7 +19,7 @@ export function parseLists(v: unknown): GameList[] {
         isPublic: l.isPublic !== false,
         items: l.items.flatMap((i: { game?: Game; note?: unknown }) =>
           i?.game && typeof i.game.id === "string" && typeof i.game.name === "string"
-            ? [{ game: i.game, note: typeof i.note === "string" ? i.note : "" }]
+            ? [{ game: cleanGame(i.game), note: typeof i.note === "string" ? i.note : "" }]
             : [],
         ),
         createdAt: Number(l.createdAt) || Date.now(),
@@ -43,7 +44,7 @@ export function parseTopFour(v: unknown): (Game | null)[] {
   if (!Array.isArray(v)) return EMPTY_TOP_FOUR;
   return EMPTY_TOP_FOUR.map((_, i) => {
     const g = v[i] as Partial<Game> | null | undefined;
-    return g && typeof g.id === "string" && typeof g.name === "string" ? (g as Game) : null;
+    return g && typeof g.id === "string" && typeof g.name === "string" ? cleanGame(g as Game) : null;
   });
 }
 
@@ -51,7 +52,10 @@ export function readLocalShelf(): Shelf {
   try {
     const raw = localStorage.getItem(SHELF_KEY);
     const v = raw ? JSON.parse(raw) : {};
-    return v && typeof v === "object" && !Array.isArray(v) ? (v as Shelf) : {};
+    if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+    const shelf = v as Shelf;
+    for (const entry of Object.values(shelf)) if (entry?.game) entry.game = cleanGame(entry.game);
+    return shelf;
   } catch {
     return {};
   }

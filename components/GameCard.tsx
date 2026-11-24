@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Bookmark, Check, Clock, PenLine, Star, Users } from "lucide-react";
 import type { Game, ShelfEntry } from "@/lib/types";
 import { useGameImage } from "@/lib/useGameImage";
+import { forgetCachedImage } from "@/lib/imageCache";
 
 export interface CardHandlers {
   onToggleOwned: (g: Game) => void;
@@ -43,6 +44,19 @@ export function Poster({
   }, [src]);
 
   const showImage = Boolean(src) && !broken;
+
+  // An image that neither loads nor errors would leave a grey shimmer forever: give up after 8s
+  // and show the styled title card instead.
+  useEffect(() => {
+    if (!showImage || loaded) return;
+    const t = setTimeout(() => setBroken(true), 8000);
+    return () => clearTimeout(t);
+  }, [showImage, loaded, src]);
+
+  const failed = () => {
+    setBroken(true);
+    forgetCachedImage(game.id); // don't keep serving a dead URL from the session cache
+  };
   const h = game.hue ?? (Number(game.id) % 360 || 200);
 
   return (
@@ -75,7 +89,7 @@ export function Poster({
             loaded ? "opacity-100" : "opacity-0"
           }`}
           onLoad={() => setLoaded(true)}
-          onError={() => setBroken(true)}
+          onError={failed}
         />
       )}
 

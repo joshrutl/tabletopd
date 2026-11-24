@@ -1,5 +1,6 @@
 import type { Game } from "./types";
 import { createClient } from "./supabase/client";
+import { cleanGame } from "./text";
 
 /** A user as shown in follow lists and search results. */
 export interface PersonRef {
@@ -133,7 +134,7 @@ export async function fetchActivity(following: PersonRef[]): Promise<ActivityIte
       {
         userId: r.user_id as string,
         username,
-        game: r.game_data as Game,
+        game: cleanGame(r.game_data as Game),
         verb,
         rating,
         review,

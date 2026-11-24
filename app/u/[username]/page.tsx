@@ -5,6 +5,7 @@ import { Dices } from "lucide-react";
 import { createAnonClient } from "@/lib/supabase/admin";
 import { parseTopFour } from "@/lib/localData";
 import { escapeLike } from "@/lib/follows";
+import { cleanGame } from "@/lib/text";
 import type { Game } from "@/lib/types";
 import { Poster } from "@/components/GameCard";
 import FollowSection from "@/components/FollowSection";
@@ -66,12 +67,12 @@ async function loadProfile(rawUsername: string) {
       .order("position", { ascending: true });
     for (const i of items ?? []) {
       const arr = itemsByList.get(i.list_id) ?? [];
-      arr.push({ game: i.game_data as Game, note: i.note ?? "" });
+      arr.push({ game: cleanGame(i.game_data as Game), note: i.note ?? "" });
       itemsByList.set(i.list_id, arr);
     }
   }
 
-  const rows = (games.data ?? []) as GameRow[];
+  const rows = ((games.data ?? []) as GameRow[]).map((r) => ({ ...r, game_data: cleanGame(r.game_data) }));
   const rated = rows.filter((r) => Number(r.rating) > 0);
   return {
     profile: {

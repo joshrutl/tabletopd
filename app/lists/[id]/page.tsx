@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Dices } from "lucide-react";
 import { createAnonClient } from "@/lib/supabase/admin";
 import type { Game } from "@/lib/types";
+import { cleanGame } from "@/lib/text";
 import { Poster } from "@/components/GameCard";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,10 @@ async function loadList(id: string) {
   return {
     list,
     owner: owner?.username as string | null | undefined,
-    items: (items ?? []) as Array<{ bgg_id: number; game_data: Game; note: string | null }>,
+    items: ((items ?? []) as Array<{ bgg_id: number; game_data: Game; note: string | null }>).map((i) => ({
+      ...i,
+      game_data: cleanGame(i.game_data),
+    })),
   };
 }
 

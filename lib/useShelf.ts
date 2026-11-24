@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Game, Shelf, ShelfEntry } from "./types";
 import { createClient } from "./supabase/client";
 import { readLocalShelf, SHELF_KEY, writeLocal } from "./localData";
+import { getCachedImage } from "./imageCache";
+import { cleanGame } from "./text";
 
 export function emptyEntry(game: Game): ShelfEntry {
   return {
@@ -53,9 +55,16 @@ function toRow(userId: string, e: ShelfEntry) {
   };
 }
 
+/** Fills in `thumbnail` from the session image cache when the game doesn't carry a cover yet. */
+function withCachedCover(game: Game): Game {
+  if (game.thumbnail || game.image) return game;
+  const url = getCachedImage(game.id);
+  return url ? { ...game, thumbnail: url } : game;
+}
+
 function fromRow(r: Row): ShelfEntry {
   return {
-    game: r.game_data,
+    game: cleanGame(r.game_data), // older rows may hold names like "Andromeda&#039;s Edge"
     owned: r.owned,
     wishlist: r.wishlist,
     rating: Number(r.rating) || 0,
@@ -135,7 +144,10 @@ export function useShelf(userId: string | null, onError: (message: string) => vo
     (game: Game, mutate: (cur: ShelfEntry) => ShelfEntry) => {
       if (!ready) return;
       const cur = shelfRef.current[game.id] ?? emptyEntry(game);
-      const updated = { ...mutate(cur), updatedAt: Date.now() };
+      const mutated = mutate(cur);
+      // Store the cover URL we already resolved in the saved game, so shelf cards render it instantly
+      // next time instead of waiting on an image lookup.
+      const updated = { ...mutated, game: withCachedCover(mutated.game), updatedAt: Date.now() };
       const empty = isEmpty(updated);
       const next = { ...shelfRef.current };
       if (empty) delete next[game.id];

@@ -3,9 +3,10 @@
 import { useEffect, useState, type RefObject } from "react";
 import type { Game } from "./types";
 import { validImageUrl } from "./images";
+import { getCachedImage, isRecentImageMiss, recordImageMiss, setCachedImage } from "./imageCache";
 
-/* One lookup per game per page load, and at most 4 in flight at once. */
-const lookups = new Map<string, Promise<string | null>>();
+/* In-flight lookups (deduped), at most 4 running at once. Results live in imageCache. */
+const inflight = new Map<string, Promise<string | null>>();
 let active = 0;
 const queue: Array<() => void> = [];
 
@@ -20,39 +21,62 @@ async function limited<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+const TRANSIENT_MISS_MS = 20 * 1000;
+
 function lookup(id: string): Promise<string | null> {
-  let p = lookups.get(id);
+  const cached = getCachedImage(id);
+  if (cached) return Promise.resolve(cached); // already resolved this session: no request
+  if (isRecentImageMiss(id)) return Promise.resolve(null);
+
+  let p = inflight.get(id);
   if (!p) {
     p = limited(async () => {
       try {
         const res = await fetch(`/api/bgg/image?id=${encodeURIComponent(id)}`);
-        if (!res.ok) return null;
-        const data = (await res.json()) as { image_url?: string | null };
-        return validImageUrl(data.image_url);
+        if (!res.ok) {
+          recordImageMiss(id, TRANSIENT_MISS_MS);
+          return null;
+        }
+        const url = validImageUrl(((await res.json()) as { image_url?: string | null }).image_url);
+        if (url) setCachedImage(id, url);
+        else recordImageMiss(id); // a definite "no image yet" (e.g. no BGG token configured)
+        return url;
       } catch {
+        // Network blip: retry soon rather than remembering a failure for the whole session.
+        recordImageMiss(id, TRANSIENT_MISS_MS);
         return null;
       }
-    });
-    lookups.set(id, p);
+    }).finally(() => inflight.delete(id));
+    inflight.set(id, p);
   }
   return p;
 }
 
 /**
- * Box-art URL for a game. Uses the game's own image when it has one; otherwise
- * looks it up (once the element scrolls near the viewport). `resolving` is true
- * until that lookup finishes, so callers can show a skeleton.
+ * Box-art URL for a game. Uses the game's own image when it has one, then the
+ * session cache (so remounting a card on a tab switch shows its cover with no
+ * request and no flash), and otherwise looks it up once the element scrolls
+ * near the viewport. `resolving` is true until that finishes.
  */
 export function useGameImage(game: Game, ref: RefObject<Element | null>) {
   const direct = validImageUrl(game.image) ?? validImageUrl(game.thumbnail);
   const numeric = /^\d+$/.test(game.id);
-  const [found, setFound] = useState<string | null>(null);
-  const [settled, setSettled] = useState(false);
+
+  // Seed from the cache synchronously so a remounted card renders its cover immediately.
+  const [found, setFound] = useState<string | null>(() => (direct ? null : getCachedImage(game.id)));
+  const [settled, setSettled] = useState(() => (direct ? true : Boolean(getCachedImage(game.id))));
 
   useEffect(() => {
+    if (direct || !numeric) return;
+    const cached = getCachedImage(game.id);
+    if (cached) {
+      setFound(cached);
+      setSettled(true);
+      return;
+    }
     setFound(null);
     setSettled(false);
-    if (direct || !numeric) return;
+
     const el = ref.current;
     if (!el) return;
 

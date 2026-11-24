@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { XMLParser } from "fast-xml-parser";
 import { createAdminClient, createAnonClient } from "@/lib/supabase/admin";
-import { validImageUrl } from "@/lib/images";
+import { firstValidImageUrl, validImageUrl } from "@/lib/images";
 
 export const dynamic = "force-dynamic";
 
@@ -63,26 +63,31 @@ async function fromBggApi(id: number, token: string): Promise<string | null> {
   if (!res.ok) return null;
   const data = parser.parse(await res.text());
   const item = Array.isArray(data?.items?.item) ? data.items.item[0] : data?.items?.item;
-  return validImageUrl(item?.image ?? item?.thumbnail);
+  // Newer games sometimes have <image> before <thumbnail> (or the reverse), so accept either.
+  return firstValidImageUrl(item?.image, item?.thumbnail);
 }
 
-/** Best-effort write to the cache; errors (RLS, timeout, missing table) are ignored. */
+/**
+ * Best-effort write to the cache. A failed write never breaks the response, but it is
+ * logged (RLS rejections come back as `error` values, not exceptions, so they would
+ * otherwise vanish silently).
+ */
 async function saveToCache(id: number, url: string) {
   const row = { bgg_id: id, image_url: url };
   const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
   try {
     const admin = createAdminClient();
-    if (admin) {
-      await admin.from("game_images").upsert(row).abortSignal(signal);
-    } else {
-      // Insert-only through the anon role; existing rows are never overwritten.
-      await createAnonClient()
-        ?.from("game_images")
-        .upsert(row, { onConflict: "bgg_id", ignoreDuplicates: true })
-        .abortSignal(signal);
-    }
-  } catch {
-    /* caching is optional */
+    const result = admin
+      ? // Service key: full upsert (insert or refresh), bypassing RLS.
+        await admin.from("game_images").upsert(row, { onConflict: "bgg_id" }).abortSignal(signal)
+      : // Anon role: insert-only. Existing rows are left alone, so visitors can never overwrite a cover.
+        await createAnonClient()
+          ?.from("game_images")
+          .upsert(row, { onConflict: "bgg_id", ignoreDuplicates: true })
+          .abortSignal(signal);
+    if (result?.error) console.error(`[game_images] couldn't cache ${id}: ${result.error.message}`);
+  } catch (e) {
+    console.error(`[game_images] cache write failed for ${id}:`, e instanceof Error ? e.message : e);
   }
 }
 

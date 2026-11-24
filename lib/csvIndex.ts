@@ -3,6 +3,7 @@ import path from "node:path";
 import Papa from "papaparse";
 import type { Game, SortId } from "./types";
 import { MOCK_BY_ID } from "./mockGames";
+import { decodeHtmlEntities } from "./text";
 import { matchesFilter, NO_FILTER, type GameFilter } from "./filters";
 
 interface Row {
@@ -90,7 +91,7 @@ export function getCsvIndex(): Indexed[] | null {
 
     const game: Game = {
       id: r.id,
-      name: known?.name ?? r.name,
+      name: known?.name ?? decodeHtmlEntities(r.name),
       yearPublished: year > 0 ? year : (known?.yearPublished ?? null),
       thumbnail: known?.thumbnail ?? null,
       image: known?.image ?? null,

@@ -4,12 +4,15 @@ import type { Game, SearchResponse, SortId } from "@/lib/types";
 import { searchMockGames } from "@/lib/mockGames";
 import { getCsvIndex, searchCsv } from "@/lib/csvIndex";
 import { matchesFilter, type GameFilter } from "@/lib/filters";
+import { firstValidImageUrl } from "@/lib/images";
+import { decodeHtmlEntities } from "@/lib/text";
 
 export const dynamic = "force-dynamic";
 
 const BGG = "https://boardgamegeek.com/xmlapi2";
 const MAX_RESULTS = 12; // live BGG results (each needs a /thing lookup)
-const LOCAL_RESULTS = 24; // local CSV results
+const LOCAL_RESULTS = 24; // local CSV results, and the cap for filtered live results
+const LIVE_FILTER_POOL = 50; // live BGG candidates to resolve when a filter is active
 const SORTS: SortId[] = ["popular", "rated", "highest", "newest"];
 
 function intParam(req: NextRequest, key: string, min: number, max: number): number | null {
@@ -48,39 +51,47 @@ async function bggFetch(url: string): Promise<unknown> {
   return parser.parse(await res.text());
 }
 
-/** Resolve a list of BGG ids into clean Game objects. */
-async function fetchThings(ids: string[]): Promise<Game[]> {
-  if (ids.length === 0) return [];
+const THING_BATCH = 20; // BGG's /thing accepts at most 20 ids per request
+
+/** Resolve one batch of BGG ids (<= 20) into clean Game objects. */
+async function fetchThingBatch(ids: string[]): Promise<Game[]> {
   const data = (await bggFetch(
     `${BGG}/thing?id=${ids.join(",")}&stats=1`,
   )) as { items?: { item?: unknown } };
 
-  const items = toArray(data.items?.item) as Record<string, any>[];
-  const games = items.map((item): Game => {
+  return (toArray(data.items?.item) as Record<string, any>[]).map((item): Game => {
     const names = toArray(item.name) as Record<string, any>[];
     const primary = names.find((n) => n["@_type"] === "primary") ?? names[0];
     const avg = num(item.statistics?.ratings?.average?.["@_value"], 0);
     const year = num(item.yearpublished?.["@_value"], 0);
+    // Newer games can have only one of <image> / <thumbnail>; fill in whichever is missing.
+    const image = firstValidImageUrl(item.image, item.thumbnail);
+    const thumbnail = firstValidImageUrl(item.thumbnail, item.image);
     return {
       id: String(item["@_id"]),
-      name: String(primary?.["@_value"] ?? "Unknown"),
+      name: decodeHtmlEntities(String(primary?.["@_value"] ?? "Unknown")), // BGG sends e.g. "Andromeda&#039;s Edge"
       yearPublished: year || null,
-      thumbnail: item.thumbnail ? String(item.thumbnail) : null,
-      image: item.image ? String(item.image) : null,
+      thumbnail,
+      image,
       minPlayers: num(item.minplayers?.["@_value"], 1),
       maxPlayers: num(item.maxplayers?.["@_value"], 1),
       playingTime: num(item.playingtime?.["@_value"], 0),
       rating: avg > 0 ? Math.round(avg * 10) / 10 : null,
     };
   });
-
-  // Preserve the relevance order BGG returned the ids in.
-  return ids
-    .map((id) => games.find((g) => g.id === id))
-    .filter((g): g is Game => Boolean(g));
 }
 
-async function liveSearch(q: string): Promise<Game[]> {
+/** Resolve a list of BGG ids into Game objects, keeping the order of `ids`. */
+async function fetchThings(ids: string[]): Promise<Game[]> {
+  if (ids.length === 0) return [];
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += THING_BATCH) batches.push(ids.slice(i, i + THING_BATCH));
+  const games = (await Promise.all(batches.map(fetchThingBatch))).flat();
+  return ids.map((id) => games.find((g) => g.id === id)).filter((g): g is Game => Boolean(g));
+}
+
+/** `limit` is how many BGG hits to resolve into full games (more when filters will thin them out). */
+async function liveSearch(q: string, limit: number): Promise<Game[]> {
   let ids: string[];
   if (q) {
     const data = (await bggFetch(
@@ -88,7 +99,7 @@ async function liveSearch(q: string): Promise<Game[]> {
     )) as { items?: { item?: unknown } };
     ids = (toArray(data.items?.item) as Record<string, any>[])
       .map((i) => String(i["@_id"]))
-      .slice(0, MAX_RESULTS);
+      .slice(0, limit);
   } else {
     // No query: show BGG's "hot" list as the Trending view.
     const data = (await bggFetch(`${BGG}/hot?type=boardgame`)) as {
@@ -96,7 +107,7 @@ async function liveSearch(q: string): Promise<Game[]> {
     };
     ids = (toArray(data.items?.item) as Record<string, any>[])
       .map((i) => String(i["@_id"]))
-      .slice(0, MAX_RESULTS);
+      .slice(0, limit);
   }
   return fetchThings(ids);
 }
@@ -122,8 +133,12 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Live path: BGG can't filter, so this trims the (at most 12) results afterwards.
-    const games = (await liveSearch(q)).filter((g) => matchesFilter(g, filter));
+    // Live path: BGG can't filter server-side, so when a filter is active we resolve a deeper
+    // pool of candidates (up to 50 hits, in /thing batches of 20) and filter that, instead of
+    // trimming the 12 results a plain search returns.
+    const filtering = filter.players !== null || filter.maxTime !== null;
+    const pool = await liveSearch(q, filtering ? LIVE_FILTER_POOL : MAX_RESULTS);
+    const games = pool.filter((g) => matchesFilter(g, filter)).slice(0, filtering ? LOCAL_RESULTS : MAX_RESULTS);
     const body: SearchResponse = { games, source: "bgg" };
     return NextResponse.json(body);
   } catch (err) {

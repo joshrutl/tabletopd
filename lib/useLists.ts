@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Game, GameList } from "./types";
 import { createClient } from "./supabase/client";
 import { LISTS_KEY, readLocalLists, writeLocal } from "./localData";
+import { cleanGame } from "./text";
 
 /* ---------------------------- Supabase mapping ---------------------------- */
 
@@ -128,7 +129,7 @@ export function useLists(userId: string | null, onError: (message: string) => vo
           description: r.description ?? "",
           isRanked: Boolean(r.is_ranked),
           isPublic: r.is_public !== false,
-          items: (itemsByList.get(r.id) ?? []).map((i) => ({ game: i.game_data, note: i.note ?? "" })),
+          items: (itemsByList.get(r.id) ?? []).map((i) => ({ game: cleanGame(i.game_data), note: i.note ?? "" })),
           createdAt: Date.parse(r.created_at ?? "") || Date.now(),
           updatedAt: Date.parse(r.updated_at ?? "") || Date.now(),
         })),
