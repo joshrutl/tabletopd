@@ -1,7 +1,40 @@
-import type { Game, Shelf } from "./types";
+import type { Game, GameList, Shelf } from "./types";
 
 export const SHELF_KEY = "tabletopd.shelf.v1";
 export const TOP_FOUR_KEY = "tabletopd_top_four";
+export const LISTS_KEY = "tabletopd_lists";
+
+/** Keeps only well-formed lists from stored/remote data. */
+export function parseLists(v: unknown): GameList[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((l): GameList[] => {
+    if (!l || typeof l.id !== "string" || typeof l.title !== "string" || !Array.isArray(l.items)) return [];
+    return [
+      {
+        id: l.id,
+        title: l.title,
+        description: typeof l.description === "string" ? l.description : "",
+        isRanked: Boolean(l.isRanked),
+        isPublic: l.isPublic !== false,
+        items: l.items.flatMap((i: { game?: Game; note?: unknown }) =>
+          i?.game && typeof i.game.id === "string" && typeof i.game.name === "string"
+            ? [{ game: i.game, note: typeof i.note === "string" ? i.note : "" }]
+            : [],
+        ),
+        createdAt: Number(l.createdAt) || Date.now(),
+        updatedAt: Number(l.updatedAt) || Date.now(),
+      },
+    ];
+  });
+}
+
+export function readLocalLists(): GameList[] {
+  try {
+    return parseLists(JSON.parse(localStorage.getItem(LISTS_KEY) ?? "[]"));
+  } catch {
+    return [];
+  }
+}
 
 export const EMPTY_TOP_FOUR: (Game | null)[] = [null, null, null, null];
 
@@ -45,6 +78,7 @@ export function clearLocalData() {
   try {
     localStorage.removeItem(SHELF_KEY);
     localStorage.removeItem(TOP_FOUR_KEY);
+    localStorage.removeItem(LISTS_KEY);
   } catch {
     /* ignore */
   }

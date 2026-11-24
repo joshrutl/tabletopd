@@ -36,3 +36,24 @@ export interface ShelfEntry {
 }
 
 export type Shelf = Record<string, ShelfEntry>;
+
+/** One game in a custom list. Its position is its index in `GameList.items`. */
+export interface ListItem {
+  game: Game;
+  /** Optional short note, e.g. "Great with 2" */
+  note: string;
+}
+
+export interface GameList {
+  /** UUID, generated on the client so it is the same locally and in Supabase */
+  id: string;
+  title: string;
+  description: string;
+  /** Show #1, #2, #3 ... badges */
+  isRanked: boolean;
+  /** Shareable by link once synced to an account */
+  isPublic: boolean;
+  items: ListItem[];
+  createdAt: number;
+  updatedAt: number;
+}

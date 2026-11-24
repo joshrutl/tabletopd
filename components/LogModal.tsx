@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bookmark, Check, X } from "lucide-react";
-import type { Game, ShelfEntry } from "@/lib/types";
+import { Bookmark, Check, ListPlus, X } from "lucide-react";
+import type { Game, GameList, ShelfEntry } from "@/lib/types";
 import { emptyEntry } from "@/lib/useShelf";
 import StarRating from "./StarRating";
 import { Poster, playerLabel } from "./GameCard";
@@ -12,11 +12,77 @@ interface Props {
   entry?: ShelfEntry;
   onSave: (entry: ShelfEntry) => void;
   onClose: () => void;
+  lists: GameList[];
+  /** Adds the game to a list right away (independent of the Save button). */
+  onAddToList: (listId: string, game: Game) => boolean;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function LogModal({ game, entry, onSave, onClose }: Props) {
+/** One-tap "Add to list": tapping a list adds the game immediately. */
+function AddToList({
+  game,
+  lists,
+  onAdd,
+}: {
+  game: Game;
+  lists: GameList[];
+  onAdd: (listId: string, game: Game) => boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="inline-flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm font-medium text-white/80 transition hover:border-emerald hover:text-emerald"
+      >
+        <ListPlus size={16} /> Add to list
+      </button>
+
+      {open && (
+        <div className="mt-2 overflow-hidden rounded-lg border border-line bg-bg/60">
+          {lists.length === 0 ? (
+            <p className="px-3 py-3 text-sm text-muted">
+              No lists yet. Create one under My Shelf → Lists, then add games from here.
+            </p>
+          ) : (
+            <ul className="max-h-44 overflow-y-auto">
+              {lists.map((l) => {
+                const has = l.items.some((i) => i.game.id === game.id);
+                return (
+                  <li key={l.id}>
+                    <button
+                      type="button"
+                      disabled={has}
+                      onClick={() => onAdd(l.id, game)}
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition enabled:hover:bg-line disabled:opacity-60"
+                    >
+                      <span className="min-w-0 truncate text-white">{l.title}</span>
+                      <span className={`flex-none text-xs ${has ? "text-emerald" : "text-muted"}`}>
+                        {has ? (
+                          <span className="inline-flex items-center gap-1">
+                            <Check size={12} /> Added
+                          </span>
+                        ) : (
+                          `${l.items.length} games`
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function LogModal({ game, entry, onSave, onClose, lists, onAddToList }: Props) {
   const initial = entry ?? emptyEntry(game);
   const [rating, setRating] = useState(initial.rating);
   const [owned, setOwned] = useState(initial.owned);
@@ -151,6 +217,8 @@ export default function LogModal({ game, entry, onSave, onClose }: Props) {
             />
             <span className="mt-1 block text-right normal-case">{review.length}/500</span>
           </label>
+
+          <AddToList game={game} lists={lists} onAdd={onAddToList} />
         </div>
 
         <footer className="flex justify-end gap-2 border-t border-line p-4">

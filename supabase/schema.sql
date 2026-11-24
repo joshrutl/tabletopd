@@ -158,3 +158,91 @@ drop policy if exists "signed-in users can cache new game images" on public.game
 drop policy if exists "anyone can cache new game images" on public.game_images;
 create policy "anyone can cache new game images"
   on public.game_images for insert to anon, authenticated with check (true);
+
+-- ---------------------------------------------------------------------------
+-- Custom lists ("Fav 2-Player Games", "Travel Games", ...)
+-- Public lists are readable by everyone (so they can be shared by link);
+-- private lists only by their owner. Only owners can write.
+-- ---------------------------------------------------------------------------
+create table if not exists public.lists (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users (id) on delete cascade,
+  title       text not null,
+  description text default '',
+  is_ranked   boolean default false,
+  is_public   boolean default true,
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+create index if not exists lists_user_id_idx on public.lists (user_id);
+
+create table if not exists public.list_items (
+  id         uuid primary key default gen_random_uuid(),
+  list_id    uuid not null references public.lists (id) on delete cascade,
+  bgg_id     integer not null,
+  game_data  jsonb not null,
+  note       text default '',
+  position   integer not null default 0,
+  unique (list_id, bgg_id)
+);
+create index if not exists list_items_list_position_idx on public.list_items (list_id, position);
+
+drop trigger if exists lists_set_updated_at on public.lists;
+create trigger lists_set_updated_at
+  before update on public.lists
+  for each row execute function public.set_updated_at();
+
+alter table public.lists      enable row level security;
+alter table public.list_items enable row level security;
+
+-- lists
+drop policy if exists "public lists are readable; owners read their own" on public.lists;
+create policy "public lists are readable; owners read their own"
+  on public.lists for select
+  using (is_public = true or auth.uid() = user_id);
+
+drop policy if exists "users insert their own lists" on public.lists;
+create policy "users insert their own lists"
+  on public.lists for insert to authenticated with check (auth.uid() = user_id);
+
+drop policy if exists "users update their own lists" on public.lists;
+create policy "users update their own lists"
+  on public.lists for update to authenticated
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "users delete their own lists" on public.lists;
+create policy "users delete their own lists"
+  on public.lists for delete to authenticated using (auth.uid() = user_id);
+
+-- list_items (visibility and ownership follow the parent list)
+drop policy if exists "items of readable lists are readable" on public.list_items;
+create policy "items of readable lists are readable"
+  on public.list_items for select
+  using (exists (
+    select 1 from public.lists l
+    where l.id = list_items.list_id and (l.is_public = true or l.user_id = auth.uid())
+  ));
+
+drop policy if exists "users insert items into their own lists" on public.list_items;
+create policy "users insert items into their own lists"
+  on public.list_items for insert to authenticated
+  with check (exists (
+    select 1 from public.lists l where l.id = list_items.list_id and l.user_id = auth.uid()
+  ));
+
+drop policy if exists "users update items in their own lists" on public.list_items;
+create policy "users update items in their own lists"
+  on public.list_items for update to authenticated
+  using (exists (
+    select 1 from public.lists l where l.id = list_items.list_id and l.user_id = auth.uid()
+  ))
+  with check (exists (
+    select 1 from public.lists l where l.id = list_items.list_id and l.user_id = auth.uid()
+  ));
+
+drop policy if exists "users delete items from their own lists" on public.list_items;
+create policy "users delete items from their own lists"
+  on public.list_items for delete to authenticated
+  using (exists (
+    select 1 from public.lists l where l.id = list_items.list_id and l.user_id = auth.uid()
+  ));

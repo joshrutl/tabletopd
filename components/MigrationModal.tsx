@@ -14,6 +14,7 @@ export default function MigrationModal({ offer, busy, onAccept, onDismiss }: Pro
   const parts = [
     offer.games > 0 && `${offer.games} ${offer.games === 1 ? "game" : "games"} on your shelf`,
     offer.favorites > 0 && `${offer.favorites} Top 4 ${offer.favorites === 1 ? "favorite" : "favorites"}`,
+    offer.listCount > 0 && `${offer.listCount} ${offer.listCount === 1 ? "list" : "lists"}`,
   ].filter(Boolean);
 
   return (
@@ -26,7 +27,7 @@ export default function MigrationModal({ offer, busy, onAccept, onDismiss }: Pro
       >
         <h2 className="mb-2 text-lg font-bold text-white">Import your saved games?</h2>
         <p className="mb-5 text-sm text-muted">
-          This device has {parts.join(" and ")}. Import {parts.length > 1 ? "them" : "it"} into your account so{" "}
+          This device has {parts.join(", ")}. Import {parts.length > 1 ? "them" : "it"} into your account so{" "}
           {parts.length > 1 ? "they sync" : "it syncs"} everywhere.
         </p>
         <div className="flex justify-end gap-2">

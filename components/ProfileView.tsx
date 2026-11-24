@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Game, Shelf } from "@/lib/types";
+import type { Game, GameList, Shelf } from "@/lib/types";
+import { ListSummaryCard } from "./ListsView";
 import { isPlayed } from "@/lib/useShelf";
 import type { Auth } from "@/lib/useAuth";
 import type { TopFourState } from "@/lib/useTopFour";
@@ -15,6 +16,9 @@ interface Props {
   auth: Auth;
   top: TopFourState;
   onSignIn: () => void;
+  lists: GameList[];
+  /** Opens My Shelf → Lists, on a specific list or (null) the index. */
+  onOpenList: (id: string | null) => void;
 }
 
 /** Username + editable bio when signed in; a sign-in prompt when not. */
@@ -110,7 +114,7 @@ function AccountCard({ auth, onSignIn }: { auth: Auth; onSignIn: () => void }) {
   );
 }
 
-export default function ProfileView({ shelf, onOpen, auth, top, onSignIn }: Props) {
+export default function ProfileView({ shelf, onOpen, auth, top, onSignIn, lists, onOpenList }: Props) {
   const stats = useMemo(() => {
     const entries = Object.values(shelf);
     const rated = entries.filter((e) => e.rating > 0);
@@ -153,6 +157,27 @@ export default function ProfileView({ shelf, onOpen, auth, top, onSignIn }: Prop
       <div className="mb-8">
         <TopFour top={top} />
       </div>
+
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted">Lists</h2>
+        <button onClick={() => onOpenList(null)} className="text-xs font-semibold text-emerald hover:underline">
+          {lists.length > 0 ? "See all" : "Create a list"}
+        </button>
+      </div>
+      {lists.length === 0 ? (
+        <button
+          onClick={() => onOpenList(null)}
+          className="mb-8 w-full rounded-xl border border-dashed border-line py-8 text-sm text-muted transition hover:border-emerald hover:text-emerald"
+        >
+          Curate your first list, like &ldquo;Fav 2-Player Games&rdquo;
+        </button>
+      ) : (
+        <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {lists.slice(0, 6).map((l) => (
+            <ListSummaryCard key={l.id} list={l} onClick={() => onOpenList(l.id)} />
+          ))}
+        </div>
+      )}
 
       <h2 className={heading}>Recent reviews</h2>
       {stats.reviews.length === 0 ? (

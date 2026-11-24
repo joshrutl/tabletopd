@@ -7,11 +7,12 @@ import { useShelf } from "@/lib/useShelf";
 import { useTopFour } from "@/lib/useTopFour";
 import { useDiscover } from "@/lib/useDiscover";
 import { useAuth } from "@/lib/useAuth";
+import { useLists } from "@/lib/useLists";
 import { useMigration } from "@/lib/useMigration";
 import NavBar from "@/components/NavBar";
 import BottomNav, { type Tab } from "@/components/BottomNav";
 import DiscoverView from "@/components/DiscoverView";
-import ShelfView from "@/components/ShelfView";
+import ShelfView, { type ShelfSeg } from "@/components/ShelfView";
 import GameNightView from "@/components/GameNightView";
 import ProfileView from "@/components/ProfileView";
 import LogModal from "@/components/LogModal";
@@ -25,6 +26,7 @@ export default function Home() {
   const auth = useAuth();
   const { shelf, save, toggle, importEntries, ready: shelfReady } = useShelf(auth.userId, onError);
   const top = useTopFour(auth.userId, onError);
+  const listsState = useLists(auth.userId, onError);
   const discover = useDiscover();
   const migration = useMigration({
     userId: auth.userId,
@@ -34,10 +36,22 @@ export default function Home() {
     topSlots: top.slots,
     topReady: top.ready,
     replaceTopFour: top.replaceAll,
+    lists: listsState.lists,
+    listsReady: listsState.ready,
+    importLists: listsState.importLists,
     onError,
   });
 
   const [tab, setTab] = useState<Tab>("discover");
+  const [shelfSeg, setShelfSeg] = useState<ShelfSeg>("owned");
+  const [openListId, setOpenListId] = useState<string | null>(null);
+
+  /** Jump to My Shelf → Lists (optionally straight into one list), e.g. from the Profile tab. */
+  const openList = (id: string | null) => {
+    setShelfSeg("lists");
+    setOpenListId(id);
+    setTab("shelf");
+  };
   const [logging, setLogging] = useState<Game | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
 
@@ -75,7 +89,18 @@ export default function Home() {
         <div hidden={tab !== "discover"}>
           <DiscoverView d={discover} shelf={shelf} {...handlers} />
         </div>
-        {tab === "shelf" && <ShelfView shelf={shelf} {...handlers} />}
+        {tab === "shelf" && (
+          <ShelfView
+            shelf={shelf}
+            seg={shelfSeg}
+            onSeg={setShelfSeg}
+            listsState={listsState}
+            signedIn={Boolean(auth.userId)}
+            openListId={openListId}
+            onOpenList={setOpenListId}
+            {...handlers}
+          />
+        )}
         {tab === "night" && <GameNightView shelf={shelf} {...handlers} />}
         {tab === "profile" && (
           <ProfileView
@@ -84,6 +109,8 @@ export default function Home() {
             auth={auth}
             top={top}
             onSignIn={() => setAuthOpen(true)}
+            lists={listsState.lists}
+            onOpenList={openList}
           />
         )}
 
@@ -108,6 +135,8 @@ export default function Home() {
           entry={shelf[logging.id]}
           onSave={save}
           onClose={() => setLogging(null)}
+          lists={listsState.lists}
+          onAddToList={listsState.addToList}
         />
       )}
 
