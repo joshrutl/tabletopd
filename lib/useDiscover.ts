@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Game, SearchResponse, SortId } from "./types";
 import { NO_FILTER, type GameFilter } from "./filters";
+import { rememberCovers } from "./imageCache";
 
 const DEBOUNCE_MS = 350;
 
@@ -30,6 +31,7 @@ export function useDiscover() {
         const res = await fetch(`/api/bgg/search?${params}`, { signal: controller.signal });
         if (!res.ok) throw new Error(`Search failed (${res.status})`);
         const data = (await res.json()) as SearchResponse;
+        rememberCovers(data.games); // covers in these results become available to every other screen
         setGames(data.games);
         setSource(data.source);
         setHotAvailable(Boolean(data.hotAvailable));

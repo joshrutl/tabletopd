@@ -6,6 +6,9 @@
  * sessionStorage so it also survives a reload within the same browser tab.
  */
 
+import type { Game, Shelf } from "./types";
+import { validImageUrl } from "./images";
+
 const STORAGE_KEY = "tabletopd_img_cache_v1";
 const MAX_ENTRIES = 600;
 const MISS_TTL_MS = 5 * 60 * 1000; // the server said "no image": don't ask again for 5 minutes
@@ -46,6 +49,32 @@ function scheduleWrite() {
 export function getCachedImage(id: string): string | null {
   hydrate();
   return hits.get(id) ?? null;
+}
+
+/**
+ * Teach the cache every cover we already know about. Games loaded from your shelf, lists, Top 4
+ * or search results often carry a cover URL; other screens render the same game from an object
+ * without one (a fresh search result), and would otherwise show a blank card even though the
+ * cover is known. Seeding makes every card for that game find it instantly.
+ */
+export function rememberCovers(games: Array<Pick<Game, "id" | "image" | "thumbnail">>): void {
+  for (const g of games) {
+    if (!g || hits.has(g.id)) continue;
+    const url = validImageUrl(g.image) ?? validImageUrl(g.thumbnail);
+    if (url) setCachedImage(g.id, url);
+  }
+}
+
+/**
+ * The game with a known cover merged in (from the cache, else from the user's shelf entry),
+ * so a card can render it on first paint. Returns the same object if it already has a cover
+ * or none is known.
+ */
+export function withKnownCover<T extends Pick<Game, "id" | "image" | "thumbnail">>(game: T, shelf?: Shelf): T {
+  if (validImageUrl(game.image) || validImageUrl(game.thumbnail)) return game;
+  const stored = shelf?.[game.id]?.game;
+  const url = getCachedImage(game.id) ?? validImageUrl(stored?.image) ?? validImageUrl(stored?.thumbnail);
+  return url ? { ...game, thumbnail: url } : game;
 }
 
 export function setCachedImage(id: string, url: string): void {

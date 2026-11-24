@@ -5,6 +5,7 @@ import type { Game, GameList } from "./types";
 import { createClient } from "./supabase/client";
 import { LISTS_KEY, readLocalLists, writeLocal } from "./localData";
 import { cleanGame } from "./text";
+import { rememberCovers } from "./imageCache";
 
 /* ---------------------------- Supabase mapping ---------------------------- */
 
@@ -83,6 +84,7 @@ export function useLists(userId: string | null, onError: (message: string) => vo
     let cancelled = false;
     const finish = (next: GameList[]) => {
       if (cancelled) return;
+      rememberCovers(next.flatMap((l) => l.items.map((i) => i.game)));
       listsRef.current = next;
       setLists(next);
       setLoadedKey(key);

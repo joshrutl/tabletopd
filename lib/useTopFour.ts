@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Game } from "./types";
 import { createClient } from "./supabase/client";
+import { rememberCovers } from "./imageCache";
 import {
   EMPTY_TOP_FOUR,
   parseTopFour,
@@ -35,6 +36,7 @@ export function useTopFour(userId: string | null, onError: (message: string) => 
     let cancelled = false;
     const finish = (s: (Game | null)[]) => {
       if (cancelled) return;
+      rememberCovers(s.filter((g): g is Game => Boolean(g)));
       slotsRef.current = s;
       setSlots(s);
       setLoadedKey(key);

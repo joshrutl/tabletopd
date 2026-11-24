@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Game, Shelf, ShelfEntry } from "./types";
 import { createClient } from "./supabase/client";
 import { readLocalShelf, SHELF_KEY, writeLocal } from "./localData";
-import { getCachedImage } from "./imageCache";
+import { getCachedImage, rememberCovers } from "./imageCache";
 import { cleanGame } from "./text";
 
 export function emptyEntry(game: Game): ShelfEntry {
@@ -105,6 +105,7 @@ export function useShelf(userId: string | null, onError: (message: string) => vo
     let cancelled = false;
     const finish = (s: Shelf) => {
       if (cancelled) return;
+      rememberCovers(Object.values(s).map((e) => e.game)); // share known covers with every screen
       shelfRef.current = s;
       setShelf(s);
       setLoadedKey(key);

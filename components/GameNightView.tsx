@@ -5,6 +5,7 @@ import { Dices, Loader2 } from "lucide-react";
 import type { Game, SearchResponse, Shelf } from "@/lib/types";
 import { matchesFilter, PLAYER_OPTIONS, TIME_OPTIONS } from "@/lib/filters";
 import { prefetchImages } from "@/lib/useGameImage";
+import { rememberCovers, withKnownCover } from "@/lib/imageCache";
 import GameCard, { type CardHandlers } from "./GameCard";
 import GameGrid from "./GameGrid";
 import { Chip } from "./FilterPanel";
@@ -36,6 +37,7 @@ export default function GameNightView({ shelf, ...handlers }: Props) {
     fetch(`/api/bgg/search?${params}`, { signal: controller.signal })
       .then((r) => r.json() as Promise<SearchResponse>)
       .then((data) => {
+        rememberCovers(data.games);
         setRemote(data.games);
         setLoading(false);
       })
@@ -45,14 +47,19 @@ export default function GameNightView({ shelf, ...handlers }: Props) {
     return () => controller.abort();
   }, [players, maxTime, ownedOnly]);
 
+  // Merge every cover we already know (session cache, or saved with the game on your shelf) onto
+  // the games before they reach a card, exactly so cards for games with covers elsewhere in the
+  // app render them on first paint instead of a blank placeholder.
   const results = useMemo(
-    () => (ownedOnly ? owned.filter((g) => matchesFilter(g, { players, maxTime })) : remote),
-    [ownedOnly, owned, remote, players, maxTime],
+    () =>
+      (ownedOnly ? owned.filter((g) => matchesFilter(g, { players, maxTime })) : remote).map((g) =>
+        withKnownCover(g, shelf),
+      ),
+    [ownedOnly, owned, remote, players, maxTime, shelf],
   );
 
-  // Ask the shared batched cover fetcher for every game on screen right away. It reads the
-  // session cache first, so covers already loaded on Discover / My Shelf show instantly and
-  // only the rest are requested (as a couple of batched calls, not one per card).
+  // Ask the shared batched cover fetcher for whatever is still missing, right away. Games that
+  // already have a cover are skipped, so only the rest cost a request (a couple of batched calls).
   useEffect(() => {
     prefetchImages(results);
   }, [results]);
