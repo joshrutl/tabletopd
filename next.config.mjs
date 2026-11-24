@@ -12,7 +12,6 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "cf.geekdo-images.com" },
       { protocol: "https", hostname: "**.geekdo-images.com" },
-      { protocol: "https", hostname: "upload.wikimedia.org" },
     ],
   },
 };

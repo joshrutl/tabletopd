@@ -1,8 +1,5 @@
-/**
- * Only these image hosts are trusted for box art: BGG's CDN (from the official
- * API) and Wikimedia (the hand-picked covers in lib/mockGames.ts).
- */
-const TRUSTED_HOST = /(^|\.)geekdo-images\.com$|^(upload|thumb)\.wikimedia\.org$/;
+/** Box art is only trusted from BGG's image CDN (URLs come from the official API). */
+const TRUSTED_HOST = /(^|\.)geekdo-images\.com$/;
 
 /** Returns a normalised https URL if it's on a trusted image host, otherwise null. */
 export function validImageUrl(raw: string | null | undefined): string | null {

@@ -133,8 +133,8 @@ create policy "users delete their own user_games"
 -- game_images: shared cache of box-art URLs (one row per BGG game)
 -- Written by the /api/bgg/image route. With SUPABASE_SERVICE_ROLE_KEY set the
 -- route bypasses RLS; without it, anonymous and signed-in visitors can insert
--- (never update or delete) rows, and only for URLs on BGG's image CDN or
--- Wikimedia. Set the service key and drop the insert policy to lock this down.
+-- (never update or delete) rows, and only for URLs on BGG's image CDN.
+-- Set the service key and drop the insert policy to lock this down.
 -- ---------------------------------------------------------------------------
 create table if not exists public.game_images (
   bgg_id      integer primary key,
@@ -142,14 +142,11 @@ create table if not exists public.game_images (
   updated_at  timestamptz not null default now()
 );
 
--- Allowed hosts: BGG's image CDN and Wikimedia (Wikipedia article images).
+-- Only BGG's image CDN is allowed.
 alter table public.game_images drop constraint if exists game_images_url_is_geekdo;
 alter table public.game_images drop constraint if exists game_images_url_is_trusted;
 alter table public.game_images add constraint game_images_url_is_trusted
-  check (
-    image_url ~ '^https://([a-z0-9-]+\.)*geekdo-images\.com/'
-    or image_url ~ '^https://(upload|thumb)\.wikimedia\.org/'
-  );
+  check (image_url ~ '^https://([a-z0-9-]+\.)*geekdo-images\.com/');
 
 alter table public.game_images enable row level security;
 
