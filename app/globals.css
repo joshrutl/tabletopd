@@ -6,6 +6,11 @@
   color-scheme: dark;
 }
 
+/* Keep anything scrolled or focused into view clear of the sticky header (~64px on phones). */
+html {
+  scroll-padding-top: 5rem;
+}
+
 body {
   background: #14181c;
   color: #e5eaee;

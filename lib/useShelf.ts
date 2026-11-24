@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Game, Shelf, ShelfEntry } from "./types";
 import { createClient } from "./supabase/client";
 import { readLocalShelf, SHELF_KEY, writeLocal } from "./localData";
-import { getCachedImage, rememberCovers } from "./imageCache";
+import { getCachedImage, onCoverKnown, rememberCovers } from "./imageCache";
 import { cleanGame } from "./text";
 
 export function emptyEntry(game: Game): ShelfEntry {
@@ -140,6 +140,22 @@ export function useShelf(userId: string | null, onError: (message: string) => vo
   useEffect(() => {
     if (!userId && loadedKey === "local") writeLocal(SHELF_KEY, shelf);
   }, [shelf, userId, loadedKey]);
+
+  // When a cover resolves anywhere in the app, store it on the matching shelf game too, so owned
+  // games carry their cover with them. This is in memory (and localStorage when signed out); it
+  // reaches Supabase with the entry's next real save. Writing it straight to user_games would
+  // bump updated_at and make old shelf items look like fresh activity in friends' feeds.
+  useEffect(
+    () =>
+      onCoverKnown((id, url) => {
+        const entry = shelfRef.current[id];
+        if (!entry || entry.game.thumbnail || entry.game.image) return;
+        const next = { ...shelfRef.current, [id]: { ...entry, game: { ...entry.game, thumbnail: url } } };
+        shelfRef.current = next;
+        setShelf(next);
+      }),
+    [],
+  );
 
   const apply = useCallback(
     (game: Game, mutate: (cur: ShelfEntry) => ShelfEntry) => {

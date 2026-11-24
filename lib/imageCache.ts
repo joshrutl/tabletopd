@@ -77,12 +77,26 @@ export function withKnownCover<T extends Pick<Game, "id" | "image" | "thumbnail"
   return url ? { ...game, thumbnail: url } : game;
 }
 
+type CoverListener = (id: string, url: string) => void;
+const listeners = new Set<CoverListener>();
+
+/**
+ * Be told whenever a game's cover becomes known (a lookup resolved, or covers were seeded).
+ * The shelf and lists use this to store the URL on their games in memory, so those cards
+ * carry their cover with them. Returns an unsubscribe function.
+ */
+export function onCoverKnown(listener: CoverListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 export function setCachedImage(id: string, url: string): void {
   hydrate();
   misses.delete(id);
   if (hits.get(id) === url) return;
   hits.set(id, url);
   scheduleWrite();
+  for (const l of listeners) l(id, url);
 }
 
 /** Drops a URL that turned out to be broken so it gets looked up again later. */

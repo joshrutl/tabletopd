@@ -9,14 +9,14 @@ import { getCachedImage, isRecentImageMiss, recordImageMiss, setCachedImage } fr
  * One shared, batched cover fetcher for every screen (Discover, My Shelf, Game Night, Profile...).
  *
  * Cards ask for a cover by id; asks made within a few milliseconds of each other are sent as a
- * single /api/bgg/images request (up to 20 ids), so a grid of 24 cards costs 2 requests, not 24.
+ * single /api/bgg/images request (up to 15 ids), so a grid of 24 cards costs 2 requests, not 24.
  * That keeps us well under BGG's rate limits, which is what used to leave random cards blank.
  * Results go into imageCache (memory + sessionStorage), so remounting a card never re-asks.
  */
 
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 15; // matches the server's /thing chunk size: one BGG call per request
 const BATCH_DELAY_MS = 40;
-const MAX_PARALLEL = 3;
+const MAX_PARALLEL = 2;
 const TRANSIENT_MISS_MS = 20 * 1000;
 
 const inflight = new Map<string, Promise<string | null>>();

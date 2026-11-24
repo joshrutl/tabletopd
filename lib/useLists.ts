@@ -5,7 +5,7 @@ import type { Game, GameList } from "./types";
 import { createClient } from "./supabase/client";
 import { LISTS_KEY, readLocalLists, writeLocal } from "./localData";
 import { cleanGame } from "./text";
-import { rememberCovers } from "./imageCache";
+import { onCoverKnown, rememberCovers } from "./imageCache";
 
 /* ---------------------------- Supabase mapping ---------------------------- */
 
@@ -147,6 +147,29 @@ export function useLists(userId: string | null, onError: (message: string) => vo
   useEffect(() => {
     if (!userId && loadedKey === "local") writeLocal(LISTS_KEY, lists);
   }, [lists, userId, loadedKey]);
+
+  // Same as the shelf: when a cover resolves, store it on matching list games in memory so they
+  // carry it (persisted with the list's next save; no write to Supabase just for this).
+  useEffect(
+    () =>
+      onCoverKnown((id, url) => {
+        let changed = false;
+        const next = listsRef.current.map((l) => {
+          if (!l.items.some((i) => i.game.id === id && !i.game.thumbnail && !i.game.image)) return l;
+          changed = true;
+          return {
+            ...l,
+            items: l.items.map((i) =>
+              i.game.id === id && !i.game.thumbnail && !i.game.image ? { ...i, game: { ...i.game, thumbnail: url } } : i,
+            ),
+          };
+        });
+        if (!changed) return;
+        listsRef.current = next;
+        setLists(next);
+      }),
+    [],
+  );
 
   const commit = useCallback((next: GameList[]) => {
     listsRef.current = next;

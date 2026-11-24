@@ -75,7 +75,8 @@ export async function resolveImageIds(ids: string[]): Promise<ResolvedImages> {
  * cover but never overwrite one.
  */
 export async function saveImages(rows: Record<string, string>): Promise<void> {
-  const payload = Object.entries(rows).map(([id, url]) => ({ bgg_id: Number(id), image_url: url }));
+  const now = new Date().toISOString();
+  const payload = Object.entries(rows).map(([id, url]) => ({ bgg_id: Number(id), image_url: url, updated_at: now }));
   if (payload.length === 0) return;
   const signal = AbortSignal.timeout(CACHE_TIMEOUT_MS);
   try {

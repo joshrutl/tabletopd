@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { Game } from "@/lib/types";
 import { useShelf } from "@/lib/useShelf";
@@ -46,11 +46,25 @@ export default function Home() {
   const [shelfSeg, setShelfSeg] = useState<ShelfSeg>("owned");
   const [openListId, setOpenListId] = useState<string | null>(null);
 
+  // The page scrolls as a whole, so switching tabs used to keep the old scroll offset. Landing
+  // 300px down a tab that is only 100px tall left its first row (the filter chips on Discover)
+  // half hidden under the sticky header. Each tab now remembers its own position and starts
+  // at the top the first time.
+  const scrollByTab = useRef<Partial<Record<Tab, number>>>({});
+  const switchTab = (next: Tab) => {
+    if (next === tab) return;
+    scrollByTab.current[tab] = window.scrollY;
+    setTab(next);
+  };
+  useEffect(() => {
+    window.scrollTo({ top: scrollByTab.current[tab] ?? 0 });
+  }, [tab]);
+
   /** Jump to My Shelf → Lists (optionally straight into one list), e.g. from the Profile tab. */
   const openList = (id: string | null) => {
     setShelfSeg("lists");
     setOpenListId(id);
-    setTab("shelf");
+    switchTab("shelf");
   };
   const [logging, setLogging] = useState<Game | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
@@ -128,7 +142,7 @@ export default function Home() {
         </footer>
       </main>
 
-      <BottomNav tab={tab} onTab={setTab} shelfCount={Object.keys(shelf).length} />
+      <BottomNav tab={tab} onTab={switchTab} shelfCount={Object.keys(shelf).length} />
 
       {logging && (
         <LogModal

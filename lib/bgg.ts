@@ -11,7 +11,10 @@ import { decodeHtmlEntities } from "./text";
 
 export const BGG = "https://boardgamegeek.com/xmlapi2";
 const TIMEOUT_MS = 6000;
-const THING_BATCH = 20; // BGG's /thing accepts at most 20 ids per request
+const RETRIES_ON_202 = 2; // BGG sometimes answers 202 first; try again after a short wait
+const RETRY_202_DELAY_MS = 1200;
+const THING_BATCH = 15; // BGG's hard limit is 20 ids per /thing call; 15 leaves headroom
+const PAUSE_BETWEEN_BATCHES_MS = 250; // and we space calls out so bursts don't get throttled (429)
 const THING_TTL_MS = 6 * 60 * 60 * 1000;
 const THING_CACHE_MAX = 4000;
 
@@ -27,18 +30,38 @@ function num(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-/** GET + parse an XML API2 URL. Throws on a non-2xx response or timeout. */
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * GET + parse an XML API2 URL. Throws on a non-2xx response, a timeout, or a 202 that never
+ * becomes a real response.
+ *
+ * BGG answers 202 ("accepted, still preparing") with a body that has no items. Treating that
+ * as an empty result would look like "this game has no image", so we wait and retry instead,
+ * and never let Next's fetch cache keep a 202 around (cache: "no-store"; our own in-process
+ * and Supabase caches handle repeat requests).
+ */
 export async function bggFetch(url: string): Promise<unknown> {
   const headers: Record<string, string> = { Accept: "application/xml" };
   const token = process.env.BGG_API_TOKEN;
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(url, {
-    headers,
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-    next: { revalidate: 3600 },
-  });
-  if (!res.ok) throw new Error(`BGG responded ${res.status}`);
-  return parser.parse(await res.text());
+
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      cache: "no-store",
+    });
+    if (res.status === 202) {
+      if (attempt < RETRIES_ON_202) {
+        await sleep(RETRY_202_DELAY_MS);
+        continue;
+      }
+      throw new Error("BGG is still preparing this response (202)");
+    }
+    if (!res.ok) throw new Error(`BGG responded ${res.status}`);
+    return parser.parse(await res.text());
+  }
 }
 
 /* --------------------------------- things --------------------------------- */
@@ -69,9 +92,9 @@ const g = globalThis as unknown as G;
 const cache = (g.__bggThings ??= new Map());
 const waiters = (g.__bggWaiters ??= []);
 
-/** At most 2 BGG /thing requests at once. */
+/** One BGG /thing request at a time, across all concurrent requests to this server instance. */
 async function limited<T>(fn: () => Promise<T>): Promise<T> {
-  if ((g.__bggActive ?? 0) >= 2) await new Promise<void>((r) => waiters.push(r));
+  if ((g.__bggActive ?? 0) >= 1) await new Promise<void>((r) => waiters.push(r));
   g.__bggActive = (g.__bggActive ?? 0) + 1;
   try {
     return await fn();
@@ -135,21 +158,22 @@ export async function getThings(ids: string[]): Promise<ThingsResult> {
   const batches: string[][] = [];
   for (let i = 0; i < missing.length; i += THING_BATCH) batches.push(missing.slice(i, i + THING_BATCH));
 
-  await Promise.all(
-    batches.map((batch) =>
-      limited(async () => {
-        try {
-          for (const t of await fetchBatch(batch)) {
-            remember(t);
-            things.set(t.id, t);
-            fetched.push(t);
-          }
-        } catch (e) {
-          console.error(`[bgg] /thing batch of ${batch.length} failed:`, e instanceof Error ? e.message : e);
-          failed.push(...batch);
+  // Sequential, with a short pause after each call (the pause happens while holding the single
+  // slot, so it also spaces out calls from different requests).
+  for (const batch of batches) {
+    await limited(async () => {
+      try {
+        for (const t of await fetchBatch(batch)) {
+          remember(t);
+          things.set(t.id, t);
+          fetched.push(t);
         }
-      }),
-    ),
-  );
+      } catch (e) {
+        console.error(`[bgg] /thing batch of ${batch.length} failed:`, e instanceof Error ? e.message : e);
+        failed.push(...batch);
+      }
+      await sleep(PAUSE_BETWEEN_BATCHES_MS);
+    });
+  }
   return { things, fetched, failed };
 }
